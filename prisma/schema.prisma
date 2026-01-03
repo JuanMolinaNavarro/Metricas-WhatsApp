@@ -1,0 +1,81 @@
+// Prisma schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MessageStatus {
+  received
+  sent
+}
+
+model messages_raw {
+  uuid            String   @id
+  conversation_href String
+  status          MessageStatus
+  channel         String
+  created_at_utc  DateTime @db.Timestamptz(6)
+  payload         Json
+  inserted_at     DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model conversation_day_metrics {
+  conversation_href                  String
+  local_date                          DateTime @db.Date
+  first_inbound_at_utc                DateTime? @db.Timestamptz(6)
+  first_outbound_after_inbound_at_utc DateTime? @db.Timestamptz(6)
+  inbound_count_day                   Int      @default(0)
+  outbound_count_day                  Int      @default(0)
+  answered_same_day                   Boolean  @default(false)
+  updated_at                          DateTime @default(now()) @db.Timestamptz(6)
+  team_uuid                           String?
+  team_name                           String?
+
+  @@id([conversation_href, local_date])
+}
+
+model team_day_metrics {
+  team_uuid       String
+  team_name       String
+  local_date      DateTime @db.Date
+  inbound_count   Int      @default(0)
+  outbound_count  Int      @default(0)
+  conversations   Int      @default(0)
+  answered_count  Int      @default(0)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([team_uuid, local_date])
+  @@index([team_name])
+  @@index([local_date])
+}
+
+model conversation_cases {
+  case_id                     String   @id
+  conversation_href           String
+  team_uuid                   String
+  team_name                   String
+  opened_received_at_utc      DateTime @db.Timestamptz(6)
+  opened_payload_created_at_utc DateTime? @db.Timestamptz(6)
+  first_response_at_utc       DateTime? @db.Timestamptz(6)
+  first_response_seconds      Int?
+  answered                    Boolean  @default(false)
+  local_date                  DateTime @db.Date
+  assigned_user_email         String?
+  closed_received_at_utc      DateTime? @db.Timestamptz(6)
+  closed_payload_closed_at_utc DateTime? @db.Timestamptz(6)
+  duration_seconds            Int?
+  is_closed                   Boolean  @default(false)
+  updated_at                  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([conversation_href, opened_received_at_utc(sort: Desc)])
+  @@index([local_date])
+  @@index([team_uuid])
+  @@index([team_uuid, local_date])
+  @@index([assigned_user_email])
+  @@index([assigned_user_email, local_date])
+}
