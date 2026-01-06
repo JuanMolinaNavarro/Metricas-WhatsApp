@@ -543,3 +543,123 @@ export async function getDuracionPromedioResumenEquipos(desde: string, hasta: st
     p90_duration_seconds: row.p90_duration_seconds === null ? 0 : Number(row.p90_duration_seconds),
   }));
 }
+
+export async function getCasosResueltos(
+  desde: string,
+  hasta: string,
+  teamUuid?: string,
+  agentEmail?: string
+) {
+  const { start, endExclusive } = parseDateRange(desde, hasta);
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      dia: Date;
+      team_uuid: string;
+      team_name: string;
+      agent_email: string | null;
+      casos_abiertos: number;
+      casos_resueltos: number;
+      pct_resueltos: number | null;
+    }>
+  >`
+    SELECT
+      local_date AS dia,
+      team_uuid,
+      team_name,
+      assigned_user_email AS agent_email,
+      COUNT(*) AS casos_abiertos,
+      SUM(CASE WHEN is_closed THEN 1 ELSE 0 END) AS casos_resueltos,
+      ROUND((
+        100.0 * SUM(CASE WHEN is_closed THEN 1 ELSE 0 END)
+        / NULLIF(COUNT(*),0)
+      )::numeric, 2) AS pct_resueltos
+    FROM conversation_cases
+    WHERE local_date >= ${start}::date
+      AND local_date < ${endExclusive}::date
+      AND (${teamUuid ?? null}::text IS NULL OR team_uuid = ${teamUuid ?? null})
+      AND (${agentEmail ?? null}::text IS NULL OR assigned_user_email = ${agentEmail ?? null})
+    GROUP BY local_date, team_uuid, team_name, assigned_user_email
+    ORDER BY local_date, team_name, assigned_user_email;
+  `;
+
+  return rows.map((row) => ({
+    dia: DateTime.fromJSDate(row.dia).toISODate(),
+    team_uuid: row.team_uuid,
+    team_name: row.team_name,
+    agent_email: row.agent_email,
+    casos_abiertos: Number(row.casos_abiertos),
+    casos_resueltos: Number(row.casos_resueltos),
+    pct_resueltos: row.pct_resueltos === null ? 0 : Number(row.pct_resueltos),
+  }));
+}
+
+export async function getCasosAbandonados24h(
+  desde: string,
+  hasta: string,
+  teamUuid?: string,
+  agentEmail?: string,
+  asOf?: string
+) {
+  const { start, endExclusive } = parseDateRange(desde, hasta);
+
+  const asOfUtc = asOf
+    ? DateTime.fromISO(asOf, { zone: "utc" })
+    : null;
+  if (asOf && !asOfUtc?.isValid) {
+    throw new Error("Invalid as_of");
+  }
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      dia: Date;
+      team_uuid: string;
+      team_name: string;
+      agent_email: string | null;
+      casos_abiertos: number;
+      casos_abandonados_24h: number;
+      pct_abandonados_24h: number | null;
+    }>
+  >`
+    WITH params AS (
+      SELECT COALESCE(${asOfUtc?.toJSDate() ?? null}::timestamptz, now()) AS as_of
+    )
+    SELECT
+      c.local_date AS dia,
+      c.team_uuid,
+      c.team_name,
+      c.assigned_user_email AS agent_email,
+      COUNT(*) AS casos_abiertos,
+      SUM(
+        CASE WHEN c.last_message_status = 'received'
+          AND c.last_inbound_at_utc IS NOT NULL
+          AND (SELECT as_of FROM params) >= c.last_inbound_at_utc + interval '24 hours'
+        THEN 1 ELSE 0 END
+      ) AS casos_abandonados_24h,
+      ROUND((
+        100.0 * SUM(
+          CASE WHEN c.last_message_status = 'received'
+            AND c.last_inbound_at_utc IS NOT NULL
+            AND (SELECT as_of FROM params) >= c.last_inbound_at_utc + interval '24 hours'
+          THEN 1 ELSE 0 END
+        ) / NULLIF(COUNT(*),0)
+      )::numeric, 2) AS pct_abandonados_24h
+    FROM conversation_cases c
+    WHERE c.local_date >= ${start}::date
+      AND c.local_date < ${endExclusive}::date
+      AND (${teamUuid ?? null}::text IS NULL OR c.team_uuid = ${teamUuid ?? null})
+      AND (${agentEmail ?? null}::text IS NULL OR c.assigned_user_email = ${agentEmail ?? null})
+    GROUP BY c.local_date, c.team_uuid, c.team_name, c.assigned_user_email
+    ORDER BY c.local_date, c.team_name, c.assigned_user_email;
+  `;
+
+  return rows.map((row) => ({
+    dia: DateTime.fromJSDate(row.dia).toISODate(),
+    team_uuid: row.team_uuid,
+    team_name: row.team_name,
+    agent_email: row.agent_email,
+    casos_abiertos: Number(row.casos_abiertos),
+    casos_abandonados_24h: Number(row.casos_abandonados_24h),
+    pct_abandonados_24h: row.pct_abandonados_24h === null ? 0 : Number(row.pct_abandonados_24h),
+  }));
+}

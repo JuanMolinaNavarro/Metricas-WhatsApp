@@ -272,6 +272,45 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
       `;
     }
 
+    const isReceived = payload.status === "received";
+    const isSent = payload.status === "sent";
+
+    await tx.$executeRaw`
+      WITH candidate AS (
+        SELECT case_id
+        FROM conversation_cases
+        WHERE conversation_href = ${conversationHref}
+          AND opened_received_at_utc <= ${createdAtDate}
+        ORDER BY is_closed ASC, opened_received_at_utc DESC
+        LIMIT 1
+      )
+      UPDATE conversation_cases
+      SET last_inbound_at_utc = CASE
+            WHEN ${isReceived}
+             AND (last_inbound_at_utc IS NULL OR ${createdAtDate} > last_inbound_at_utc)
+            THEN ${createdAtDate}
+            ELSE last_inbound_at_utc
+          END,
+          last_outbound_at_utc = CASE
+            WHEN ${isSent}
+             AND (last_outbound_at_utc IS NULL OR ${createdAtDate} > last_outbound_at_utc)
+            THEN ${createdAtDate}
+            ELSE last_outbound_at_utc
+          END,
+          last_message_status = CASE
+            WHEN ${isReceived}
+             AND (last_inbound_at_utc IS NULL OR ${createdAtDate} > last_inbound_at_utc)
+            THEN 'received'::"MessageStatus"
+            WHEN ${isSent}
+             AND (last_outbound_at_utc IS NULL OR ${createdAtDate} > last_outbound_at_utc)
+            THEN 'sent'::"MessageStatus"
+            ELSE last_message_status
+          END,
+          updated_at = now()
+      FROM candidate
+      WHERE conversation_cases.case_id = candidate.case_id;
+    `;
+
     return { inserted: true };
   });
 }

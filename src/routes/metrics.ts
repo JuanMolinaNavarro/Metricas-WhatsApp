@@ -14,6 +14,8 @@ import {
   getTiempoPrimeraRespuestaResumenEquipos,
   getDuracionPromedioResumenAgentes,
   getDuracionPromedioResumenEquipos,
+  getCasosResueltos,
+  getCasosAbandonados24h,
 } from "../services/metricsService.js";
 
 export const metricsRouter = Router();
@@ -47,6 +49,17 @@ const frtRankingSchema = rangeSchema.extend({
 const durationSchema = rangeSchema.extend({
   team_uuid: z.string().optional(),
   agent_email: z.string().optional(),
+});
+
+const casosResueltosSchema = rangeSchema.extend({
+  team_uuid: z.string().optional(),
+  agent_email: z.string().optional(),
+});
+
+const casosAbandonadosSchema = rangeSchema.extend({
+  team_uuid: z.string().optional(),
+  agent_email: z.string().optional(),
+  as_of: z.string().optional(),
 });
 
 metricsRouter.get("/metrics/casos-atendidos", async (req, res) => {
@@ -254,6 +267,45 @@ metricsRouter.get("/metrics/duracion-promedio/resumen-equipos", async (req, res)
 
   try {
     const data = await getDuracionPromedioResumenEquipos(parsed.data.desde, parsed.data.hasta);
+    return res.json(data);
+  } catch (error) {
+    return res.status(400).json({ error: "invalid_date_range" });
+  }
+});
+
+metricsRouter.get("/metrics/casos-resueltos", async (req, res) => {
+  const parsed = casosResueltosSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_query", details: parsed.error.flatten() });
+  }
+
+  try {
+    const data = await getCasosResueltos(
+      parsed.data.desde,
+      parsed.data.hasta,
+      parsed.data.team_uuid,
+      parsed.data.agent_email
+    );
+    return res.json(data);
+  } catch (error) {
+    return res.status(400).json({ error: "invalid_date_range" });
+  }
+});
+
+metricsRouter.get("/metrics/casos-abandonados-24h", async (req, res) => {
+  const parsed = casosAbandonadosSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_query", details: parsed.error.flatten() });
+  }
+
+  try {
+    const data = await getCasosAbandonados24h(
+      parsed.data.desde,
+      parsed.data.hasta,
+      parsed.data.team_uuid,
+      parsed.data.agent_email,
+      parsed.data.as_of
+    );
     return res.json(data);
   } catch (error) {
     return res.status(400).json({ error: "invalid_date_range" });

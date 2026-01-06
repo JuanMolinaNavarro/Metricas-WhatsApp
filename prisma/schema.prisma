@@ -70,6 +70,9 @@ model conversation_cases {
   closed_payload_closed_at_utc DateTime? @db.Timestamptz(6)
   duration_seconds            Int?
   is_closed                   Boolean  @default(false)
+  last_inbound_at_utc         DateTime? @db.Timestamptz(6)
+  last_outbound_at_utc        DateTime? @db.Timestamptz(6)
+  last_message_status         MessageStatus?
   updated_at                  DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([conversation_href, opened_received_at_utc(sort: Desc)])

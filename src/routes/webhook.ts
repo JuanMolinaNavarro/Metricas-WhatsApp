@@ -114,6 +114,7 @@ webhookRouter.post("/webhooks/callbell", async (req, res) => {
     const result = await handleMessageCreated(messageParsed.data, rawBody);
     return res.status(200).json({ status: "ok", result });
   } catch (error) {
+    console.error(error);
     return res.status(500).json({ error: "internal_error" });
   }
 });

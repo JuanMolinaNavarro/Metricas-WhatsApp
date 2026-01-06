@@ -38,6 +38,8 @@ La API queda en `http://localhost:3000`.
 - `GET /metrics/tiempo-primera-respuesta/resumen-equipos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`
 - `GET /metrics/duracion-promedio/resumen-agentes?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`
 - `GET /metrics/duracion-promedio/resumen-equipos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`
+- `GET /metrics/casos-resueltos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&team_uuid=&agent_email=`
+- `GET /metrics/casos-abandonados-24h?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&team_uuid=&agent_email=&as_of=`
 
 ## Ejemplo de webhook (message_created)
 
@@ -98,6 +100,8 @@ Power BI puede consumir endpoints web. Ejemplos:
 - `http://localhost:3000/metrics/tiempo-primera-respuesta/resumen-equipos?desde=2025-12-01&hasta=2025-12-31`
 - `http://localhost:3000/metrics/duracion-promedio/resumen-agentes?desde=2025-12-01&hasta=2025-12-31`
 - `http://localhost:3000/metrics/duracion-promedio/resumen-equipos?desde=2025-12-01&hasta=2025-12-31`
+- `http://localhost:3000/metrics/casos-resueltos?desde=2025-12-01&hasta=2025-12-31`
+- `http://localhost:3000/metrics/casos-abandonados-24h?desde=2025-12-01&hasta=2025-12-31`
 
 ## Notas de procesamiento
 - Deduplicacion por `uuid` usando `messages_raw` con `ON CONFLICT DO NOTHING`.
@@ -106,4 +110,6 @@ Power BI puede consumir endpoints web. Ejemplos:
 - FRT se mide desde el momento en que el backend recibe `conversation_opened` hasta el primer `message_created` con status `sent`.
 - `conversation_opened` se deduplica si llega otro evento con el mismo `conversation_href` en una ventana de 60 segundos.
 - Duracion de conversacion se calcula entre `opened_received_at_utc` y `closed_received_at_utc` (server receive time) y se atribuye al dia de apertura.
+- Casos resueltos se calculan con `is_closed` sobre casos abiertos por dia de apertura.
+- Casos abandonados 24h se calculan si el ultimo mensaje fue del cliente (`last_message_status = received`) y `as_of >= last_inbound_at_utc + 24h`.
 
