@@ -113,3 +113,22 @@ Power BI puede consumir endpoints web. Ejemplos:
 - Casos resueltos se calculan con `is_closed` sobre casos abiertos por dia de apertura.
 - Casos abandonados 24h se calculan si el ultimo mensaje fue del cliente (`last_message_status = received`) y `as_of >= last_inbound_at_utc + 24h`.
 
+
+
+## Endpoints de rangos recientes
+
+- `GET /metrics/casos-atendidos/ultimas-24h`
+- `GET /metrics/casos-atendidos/ultimas-48h`
+- `GET /metrics/casos-atendidos/ultimos-7-dias`
+- `GET /metrics/casos-abiertos/ultimas-24h?team_uuid=&agent_email=`
+- `GET /metrics/casos-abiertos/ultimas-48h?team_uuid=&agent_email=`
+- `GET /metrics/casos-abiertos/ultimos-7-dias?team_uuid=&agent_email=`
+- `GET /metrics/tiempo-primera-respuesta/ultimas-24h?team_uuid=&agent_email=`
+- `GET /metrics/tiempo-primera-respuesta/ultimas-48h?team_uuid=&agent_email=`
+- `GET /metrics/tiempo-primera-respuesta/ultimos-7-dias?team_uuid=&agent_email=`
+- `GET /metrics/casos-resueltos/ultimas-24h?team_uuid=&agent_email=`
+- `GET /metrics/casos-resueltos/ultimas-48h?team_uuid=&agent_email=`
+- `GET /metrics/casos-resueltos/ultimos-7-dias?team_uuid=&agent_email=`
+- `GET /metrics/casos-abandonados-24h/ultimas-24h?team_uuid=&agent_email=&as_of=`
+- `GET /metrics/casos-abandonados-24h/ultimas-48h?team_uuid=&agent_email=&as_of=`
+- `GET /metrics/casos-abandonados-24h/ultimos-7-dias?team_uuid=&agent_email=&as_of=`

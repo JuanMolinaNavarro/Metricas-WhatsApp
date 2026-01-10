@@ -663,3 +663,45 @@ export async function getCasosAbandonados24h(
     pct_abandonados_24h: row.pct_abandonados_24h === null ? 0 : Number(row.pct_abandonados_24h),
   }));
 }
+
+
+export async function getCasosAbiertos(
+  desde: string,
+  hasta: string,
+  teamUuid?: string,
+  agentEmail?: string
+) {
+  const { start, endExclusive } = parseDateRange(desde, hasta);
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      dia: Date;
+      team_uuid: string;
+      team_name: string;
+      agent_email: string | null;
+      casos_abiertos: number;
+    }>
+  >`
+    SELECT
+      local_date AS dia,
+      team_uuid,
+      team_name,
+      assigned_user_email AS agent_email,
+      COUNT(*) AS casos_abiertos
+    FROM conversation_cases
+    WHERE local_date >= ${start}::date
+      AND local_date < ${endExclusive}::date
+      AND (${teamUuid ?? null}::text IS NULL OR team_uuid = ${teamUuid ?? null})
+      AND (${agentEmail ?? null}::text IS NULL OR assigned_user_email = ${agentEmail ?? null})
+    GROUP BY local_date, team_uuid, team_name, assigned_user_email
+    ORDER BY local_date, team_name, assigned_user_email;
+  `;
+
+  return rows.map((row) => ({
+    dia: DateTime.fromJSDate(row.dia).toISODate(),
+    team_uuid: row.team_uuid,
+    team_name: row.team_name,
+    agent_email: row.agent_email,
+    casos_abiertos: Number(row.casos_abiertos),
+  }));
+}
