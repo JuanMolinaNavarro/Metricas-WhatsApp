@@ -18,6 +18,7 @@ import {
   getCasosResueltos,
   getCasosAbandonados24h,
   getCasosAbiertos,
+  getCasosPendientes,
 } from "../services/metricsService.js";
 
 export const metricsRouter = Router();
@@ -404,6 +405,27 @@ metricsRouter.get("/metrics/casos-abandonados-24h", async (req, res) => {
   }
 });
 
+metricsRouter.get("/metrics/casos-pendientes", async (req, res) => {
+  const parsed = casosResueltosSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ error: "invalid_query", details: parsed.error.flatten() });
+  }
+
+  try {
+    const data = await getCasosPendientes(
+      parsed.data.desde,
+      parsed.data.hasta,
+      parsed.data.team_uuid,
+      parsed.data.agent_email
+    );
+    return res.json(data);
+  } catch (error) {
+    return res.status(400).json({ error: "invalid_date_range" });
+  }
+});
+
 metricsRouter.get("/metrics/casos-atendidos/ultimas-24h", async (_req, res) => {
   const range = getRecentRange(24);
   try {
@@ -459,6 +481,28 @@ metricsRouter.get("/metrics/casos-abiertos/ultimas-24h", async (req, res) => {
   }
 });
 
+metricsRouter.get("/metrics/casos-pendientes/ultimas-24h", async (req, res) => {
+  const parsed = casosResueltosSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ error: "invalid_query", details: parsed.error.flatten() });
+  }
+
+  const range = getRecentRange(24);
+  try {
+    const data = await getCasosPendientes(
+      range.desde,
+      range.hasta,
+      parsed.data.team_uuid,
+      parsed.data.agent_email
+    );
+    return res.json(data);
+  } catch (error) {
+    return res.status(400).json({ error: "invalid_date_range" });
+  }
+});
+
 metricsRouter.get("/metrics/casos-abiertos/ultimas-48h", async (req, res) => {
   const parsed = casosResueltosSchema.safeParse(req.query);
   if (!parsed.success) {
@@ -470,6 +514,28 @@ metricsRouter.get("/metrics/casos-abiertos/ultimas-48h", async (req, res) => {
   const range = getRecentRange(48);
   try {
     const data = await getCasosAbiertos(
+      range.desde,
+      range.hasta,
+      parsed.data.team_uuid,
+      parsed.data.agent_email
+    );
+    return res.json(data);
+  } catch (error) {
+    return res.status(400).json({ error: "invalid_date_range" });
+  }
+});
+
+metricsRouter.get("/metrics/casos-pendientes/ultimas-48h", async (req, res) => {
+  const parsed = casosResueltosSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ error: "invalid_query", details: parsed.error.flatten() });
+  }
+
+  const range = getRecentRange(48);
+  try {
+    const data = await getCasosPendientes(
       range.desde,
       range.hasta,
       parsed.data.team_uuid,
@@ -494,6 +560,31 @@ metricsRouter.get(
     const range = getRecentRange(24 * 7);
     try {
       const data = await getCasosAbiertos(
+        range.desde,
+        range.hasta,
+        parsed.data.team_uuid,
+        parsed.data.agent_email
+      );
+      return res.json(data);
+    } catch (error) {
+      return res.status(400).json({ error: "invalid_date_range" });
+    }
+  }
+);
+
+metricsRouter.get(
+  "/metrics/casos-pendientes/ultimos-7-dias",
+  async (req, res) => {
+    const parsed = casosResueltosSchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res
+        .status(400)
+        .json({ error: "invalid_query", details: parsed.error.flatten() });
+    }
+
+    const range = getRecentRange(24 * 7);
+    try {
+      const data = await getCasosPendientes(
         range.desde,
         range.hasta,
         parsed.data.team_uuid,
