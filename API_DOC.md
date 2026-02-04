@@ -240,3 +240,75 @@ in
 - `GET /metrics/casos-abandonados-24h/ultimas-24h?team_uuid=&agent_email=&as_of=`
 - `GET /metrics/casos-abandonados-24h/ultimas-48h?team_uuid=&agent_email=&as_of=`
 - `GET /metrics/casos-abandonados-24h/ultimos-7-dias?team_uuid=&agent_email=&as_of=`
+
+## Usuarios y login
+
+Nota: Estos endpoints no aplican hashing de passwords (texto plano).
+
+### Login
+
+`POST /auth/login`
+
+Body:
+```
+{
+  "username": "jmolina",
+  "password": "290601"
+}
+```
+
+Respuesta:
+```
+{
+  "id": 1,
+  "username": "jmolina",
+  "nombre": "Jose",
+  "apellido": "Molina",
+  "rol": "sa",
+  "isActive": true
+}
+```
+
+### Crear usuario
+
+`POST /users`
+
+Body:
+```
+{
+  "username": "user1",
+  "password": "1234",
+  "nombre": "Ana",
+  "apellido": "Perez",
+  "rol": "admin"
+}
+```
+
+Respuesta:
+```
+{
+  "id": 2,
+  "username": "user1",
+  "nombre": "Ana",
+  "apellido": "Perez",
+  "rol": "admin",
+  "isActive": true
+}
+```
+
+### Modificar usuario
+
+`PUT /users/:id`
+
+Body (campos opcionales):
+```
+{
+  "password": "nuevo",
+  "nombre": "Ana Maria",
+  "rol": "supervisor"
+}
+```
+
+### Desactivar usuario
+
+`PATCH /users/:id/deactivate`
