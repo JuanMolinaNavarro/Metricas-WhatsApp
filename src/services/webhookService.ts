@@ -160,6 +160,7 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
   // Extract team info
   const teamUuid = payload.contact.team?.uuid;
   const teamName = payload.contact.team?.name;
+  const assignedUserEmail = payload.contact?.assignedUser ?? null;
 
   return prisma.$transaction(async (tx) => {
     const inserted = await tx.$queryRaw<{ uuid: string }[]>`
@@ -171,6 +172,18 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
 
     if (inserted.length === 0) {
       return { deduped: true };
+    }
+
+    if (assignedUserEmail) {
+      await tx.$executeRaw`
+        UPDATE conversation_cases
+        SET assigned_user_email = ${assignedUserEmail},
+            updated_at = now()
+        WHERE conversation_href = ${conversationHref}
+          AND is_closed = false
+        ORDER BY opened_received_at_utc DESC
+        LIMIT 1;
+      `;
     }
 
     if (payload.status === "received") {
