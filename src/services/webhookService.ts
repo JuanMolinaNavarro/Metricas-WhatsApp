@@ -382,6 +382,10 @@ export async function handleConversationClosed(payload: ConversationClosedPayloa
     throw new Error("Missing conversation href");
   }
 
+  const contact = payload.contact ?? null;
+  const hasAssignedUser = !!contact && Object.prototype.hasOwnProperty.call(contact, "assignedUser");
+  const assignedUserEmail = hasAssignedUser ? (contact as any).assignedUser ?? null : null;
+
   const closedReceivedAtUtc = DateTime.utc();
   const closedReceivedDate = closedReceivedAtUtc.toJSDate();
   const closedPayloadUtc = payload.closedAt
@@ -411,6 +415,10 @@ export async function handleConversationClosed(payload: ConversationClosedPayloa
           closed_received_at_utc = ${closedReceivedDate},
           closed_payload_closed_at_utc = ${closedPayloadDate},
           duration_seconds = FLOOR(EXTRACT(EPOCH FROM (${closedReceivedDate} - ${openedReceivedAt}))),
+          assigned_user_email = CASE
+            WHEN ${hasAssignedUser} THEN ${assignedUserEmail}
+            ELSE assigned_user_email
+          END,
           updated_at = now()
       WHERE case_id = ${openCase[0].case_id};
     `;
