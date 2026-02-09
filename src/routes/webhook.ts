@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config.js";
-import { handleConversationClosed, handleConversationOpened, handleMessageCreated } from "../services/webhookService.js";
+import {
+  handleContactUpdated,
+  handleConversationClosed,
+  handleConversationOpened,
+  handleMessageCreated,
+} from "../services/webhookService.js";
 
 export const webhookRouter = Router();
 
@@ -29,7 +34,7 @@ const messagePayloadSchema = z.object({
     avatarUrl: z.any().optional(),
     blockedAt: z.any().optional(),
     createdAt: z.string().optional(),
-    assignedUser: z.string().optional(),
+    assignedUser: z.string().nullable().optional(),
   }).passthrough(),
 }).passthrough();
 
@@ -42,7 +47,7 @@ const conversationOpenedSchema = z.object({
       uuid: z.string().min(1),
       name: z.string().min(1),
     }),
-    assignedUser: z.string().optional(),
+    assignedUser: z.string().nullable().optional(),
   }).passthrough(),
 }).passthrough();
 
@@ -51,6 +56,13 @@ const conversationClosedSchema = z.object({
   href: z.string().min(1),
   closedAt: z.string().optional(),
   contact: z.any().optional(),
+}).passthrough();
+
+const contactUpdatedSchema = z.object({
+  uuid: z.string().optional(),
+  href: z.string().optional(),
+  conversationHref: z.string().optional(),
+  assignedUser: z.string().nullable().optional(),
 }).passthrough();
 
 const webhookSchema = z
@@ -81,7 +93,13 @@ webhookRouter.post("/webhooks/callbell", async (req, res) => {
   const event = parsed.data.event;
   const messageCandidate = parsed.data.payload ?? parsed.data.data ?? parsed.data;
 
-  if (event && event !== "message_created" && event !== "conversation_opened" && event !== "conversation_closed") {
+  if (
+    event &&
+    event !== "message_created" &&
+    event !== "conversation_opened" &&
+    event !== "conversation_closed" &&
+    event !== "contact_updated"
+  ) {
     return res.status(200).json({ status: "ignored", reason: "unsupported_event" });
   }
 
@@ -103,6 +121,16 @@ webhookRouter.post("/webhooks/callbell", async (req, res) => {
       }
 
       const result = await handleConversationClosed(closedParsed.data, rawBody);
+      return res.status(200).json({ status: "ok", result });
+    }
+
+    if (event === "contact_updated") {
+      const contactParsed = contactUpdatedSchema.safeParse(messageCandidate);
+      if (!contactParsed.success) {
+        return res.status(400).json({ error: "invalid_contact_updated", details: contactParsed.error.flatten() });
+      }
+
+      const result = await handleContactUpdated(contactParsed.data, rawBody);
       return res.status(200).json({ status: "ok", result });
     }
 
