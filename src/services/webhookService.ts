@@ -97,6 +97,7 @@ export async function handleConversationOpened(payload: ConversationOpenedPayloa
   }
 
   const assignedUserEmail = payload.contact?.assignedUser ?? null;
+  const assignedAtDate = assignedUserEmail ? openedReceivedDate : null;
   const caseId = `${conversationHref}::${openedReceivedAtUtc.toISO()}`;
 
   return prisma.$transaction(async (tx) => {
@@ -124,6 +125,7 @@ export async function handleConversationOpened(payload: ConversationOpenedPayloa
         opened_payload_created_at_utc,
         local_date,
         assigned_user_email,
+        assigned_at_utc,
         updated_at
       )
       VALUES (
@@ -135,6 +137,7 @@ export async function handleConversationOpened(payload: ConversationOpenedPayloa
         ${openedPayloadCreatedAtDate},
         ${localDate}::date,
         ${assignedUserEmail},
+        ${assignedAtDate},
         now()
       );
     `;
@@ -189,6 +192,14 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
       await tx.$executeRaw`
         UPDATE conversation_cases
         SET assigned_user_email = ${assignedUserEmail},
+            assigned_at_utc = CASE
+              WHEN assigned_user_email IS DISTINCT FROM ${assignedUserEmail}
+              THEN CASE
+                WHEN ${assignedUserEmail}::text IS NULL THEN NULL
+                ELSE ${createdAtDate}
+              END
+              ELSE assigned_at_utc
+            END,
             updated_at = now()
         WHERE case_id = (
           SELECT case_id
@@ -283,17 +294,20 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
       if (shouldCountAsAgentResponse) {
         await tx.$executeRaw`
           WITH candidate AS (
-            SELECT case_id, opened_received_at_utc
+            SELECT
+              case_id,
+              COALESCE(assigned_at_utc, opened_received_at_utc) AS frt_base_at
             FROM conversation_cases
             WHERE conversation_href = ${conversationHref}
               AND answered = false
-              AND opened_received_at_utc <= ${createdAtDate}
+              AND COALESCE(assigned_at_utc, opened_received_at_utc) <= ${createdAtDate}
             ORDER BY opened_received_at_utc DESC
             LIMIT 1
           )
           UPDATE conversation_cases
           SET first_response_at_utc = ${createdAtDate},
-              first_response_seconds = FLOOR(EXTRACT(EPOCH FROM (${createdAtDate} - candidate.opened_received_at_utc))),
+              first_response_agent_email = ${assignedUserEmail},
+              first_response_seconds = FLOOR(EXTRACT(EPOCH FROM (${createdAtDate} - candidate.frt_base_at))),
               answered = true,
               updated_at = now()
           FROM candidate
@@ -350,6 +364,14 @@ export async function handleContactUpdated(payload: ContactUpdatedPayload, rawBo
   const conversationHref = contact?.conversationHref || contact?.href || contact?.uuid || null;
   const hasAssignedUser = contact && Object.prototype.hasOwnProperty.call(contact, "assignedUser");
   const assignedUserEmail = contact?.assignedUser ?? null;
+  const assignmentUpdatedAtRaw =
+    contact?.lastUpdateAt ??
+    contact?.updatedAt ??
+    (payload as any)?.lastUpdateAt ??
+    (payload as any)?.updatedAt ??
+    (payload as any)?.createdAt;
+  const assignmentUpdatedAt = DateTime.fromISO(assignmentUpdatedAtRaw ?? "", { zone: "utc" });
+  const assignmentUpdatedAtDate = assignmentUpdatedAt.isValid ? assignmentUpdatedAt.toJSDate() : new Date();
 
   if (!conversationHref) {
     return { ignored: true, reason: "missing_conversation_href" };
@@ -361,6 +383,14 @@ export async function handleContactUpdated(payload: ContactUpdatedPayload, rawBo
   await prisma.$executeRaw`
     UPDATE conversation_cases
     SET assigned_user_email = ${assignedUserEmail},
+        assigned_at_utc = CASE
+          WHEN assigned_user_email IS DISTINCT FROM ${assignedUserEmail}
+          THEN CASE
+            WHEN ${assignedUserEmail}::text IS NULL THEN NULL
+            ELSE ${assignmentUpdatedAtDate}
+          END
+          ELSE assigned_at_utc
+        END,
         updated_at = now()
     WHERE case_id = (
       SELECT case_id
@@ -395,6 +425,7 @@ export async function handleConversationClosed(payload: ConversationClosedPayloa
     ? DateTime.fromISO(payload.closedAt, { zone: "utc" })
     : null;
   const closedPayloadDate = closedPayloadUtc && closedPayloadUtc.isValid ? closedPayloadUtc.toJSDate() : null;
+  const assignmentAtDate = closedPayloadDate ?? closedReceivedDate;
 
   return prisma.$transaction(async (tx) => {
     const openCase = await tx.$queryRaw<{ case_id: string; opened_received_at_utc: Date }[]>`
@@ -421,6 +452,14 @@ export async function handleConversationClosed(payload: ConversationClosedPayloa
           assigned_user_email = CASE
             WHEN ${hasAssignedUser} THEN ${assignedUserEmail}
             ELSE assigned_user_email
+          END,
+          assigned_at_utc = CASE
+            WHEN ${hasAssignedUser} AND assigned_user_email IS DISTINCT FROM ${assignedUserEmail}
+            THEN CASE
+              WHEN ${assignedUserEmail}::text IS NULL THEN NULL
+              ELSE ${assignmentAtDate}
+            END
+            ELSE assigned_at_utc
           END,
           updated_at = now()
       WHERE case_id = ${openCase[0].case_id};

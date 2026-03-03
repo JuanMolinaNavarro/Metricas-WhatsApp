@@ -67,7 +67,9 @@ model conversation_cases {
   team_name                   String
   opened_received_at_utc      DateTime @db.Timestamptz(6)
   opened_payload_created_at_utc DateTime? @db.Timestamptz(6)
+  assigned_at_utc             DateTime? @db.Timestamptz(6)
   first_response_at_utc       DateTime? @db.Timestamptz(6)
+  first_response_agent_email  String?
   first_response_seconds      Int?
   answered                    Boolean  @default(false)
   local_date                  DateTime @db.Date
@@ -87,6 +89,8 @@ model conversation_cases {
   @@index([team_uuid, local_date])
   @@index([assigned_user_email])
   @@index([assigned_user_email, local_date])
+  @@index([first_response_agent_email])
+  @@index([first_response_agent_email, local_date])
 }
 
 model users {

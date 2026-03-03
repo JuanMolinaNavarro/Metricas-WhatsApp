@@ -179,7 +179,10 @@ export async function getTiempoPrimeraRespuesta(
       local_date AS dia,
       team_uuid,
       team_name,
-      assigned_user_email AS agent_email,
+      CASE
+        WHEN answered THEN COALESCE(first_response_agent_email, assigned_user_email)
+        ELSE assigned_user_email
+      END AS agent_email,
       COUNT(*) AS casos_abiertos,
       SUM(CASE WHEN answered THEN 1 ELSE 0 END) AS casos_respondidos,
       ROUND((AVG(first_response_seconds) FILTER (WHERE answered))::numeric, 2) AS avg_frt_seconds,
@@ -189,9 +192,23 @@ export async function getTiempoPrimeraRespuesta(
     WHERE local_date >= ${start}::date
       AND local_date < ${endExclusive}::date
       AND (${teamUuid ?? null}::text IS NULL OR team_uuid = ${teamUuid ?? null})
-      AND (${agentEmail ?? null}::text IS NULL OR assigned_user_email = ${agentEmail ?? null})
-    GROUP BY local_date, team_uuid, team_name, assigned_user_email
-    ORDER BY local_date, team_name, assigned_user_email;
+      AND (
+        ${agentEmail ?? null}::text IS NULL
+        OR CASE
+             WHEN answered THEN COALESCE(first_response_agent_email, assigned_user_email)
+             ELSE assigned_user_email
+           END = ${agentEmail ?? null}
+      )
+    GROUP BY local_date, team_uuid, team_name,
+      CASE
+        WHEN answered THEN COALESCE(first_response_agent_email, assigned_user_email)
+        ELSE assigned_user_email
+      END
+    ORDER BY local_date, team_name,
+      CASE
+        WHEN answered THEN COALESCE(first_response_agent_email, assigned_user_email)
+        ELSE assigned_user_email
+      END;
   `;
 
   return rows.map((row) => ({
@@ -231,7 +248,10 @@ export async function getTiempoPrimeraRespuestaSla(
       local_date AS dia,
       team_uuid,
       team_name,
-      assigned_user_email AS agent_email,
+      CASE
+        WHEN answered THEN COALESCE(first_response_agent_email, assigned_user_email)
+        ELSE assigned_user_email
+      END AS agent_email,
       COUNT(*) FILTER (WHERE answered) AS casos_respondidos,
       SUM(CASE WHEN answered AND first_response_seconds <= ${maxSeconds} THEN 1 ELSE 0 END) AS casos_en_sla,
       ROUND((
@@ -242,9 +262,23 @@ export async function getTiempoPrimeraRespuestaSla(
     WHERE local_date >= ${start}::date
       AND local_date < ${endExclusive}::date
       AND (${teamUuid ?? null}::text IS NULL OR team_uuid = ${teamUuid ?? null})
-      AND (${agentEmail ?? null}::text IS NULL OR assigned_user_email = ${agentEmail ?? null})
-    GROUP BY local_date, team_uuid, team_name, assigned_user_email
-    ORDER BY local_date, team_name, assigned_user_email;
+      AND (
+        ${agentEmail ?? null}::text IS NULL
+        OR CASE
+             WHEN answered THEN COALESCE(first_response_agent_email, assigned_user_email)
+             ELSE assigned_user_email
+           END = ${agentEmail ?? null}
+      )
+    GROUP BY local_date, team_uuid, team_name,
+      CASE
+        WHEN answered THEN COALESCE(first_response_agent_email, assigned_user_email)
+        ELSE assigned_user_email
+      END
+    ORDER BY local_date, team_name,
+      CASE
+        WHEN answered THEN COALESCE(first_response_agent_email, assigned_user_email)
+        ELSE assigned_user_email
+      END;
   `;
 
   return rows.map((row) => ({
@@ -276,7 +310,7 @@ export async function getTiempoPrimeraRespuestaPorAgente(
     }>
   >`
     SELECT
-      assigned_user_email AS agent_email,
+      COALESCE(first_response_agent_email, assigned_user_email) AS agent_email,
       COUNT(*) AS casos_abiertos,
       SUM(CASE WHEN answered THEN 1 ELSE 0 END) AS casos_respondidos,
       ROUND((AVG(first_response_seconds) FILTER (WHERE answered))::numeric, 2) AS avg_frt_seconds,
@@ -286,8 +320,8 @@ export async function getTiempoPrimeraRespuestaPorAgente(
     WHERE local_date >= ${start}::date
       AND local_date < ${endExclusive}::date
       AND (${teamUuid ?? null}::text IS NULL OR team_uuid = ${teamUuid ?? null})
-    GROUP BY assigned_user_email
-    ORDER BY assigned_user_email;
+    GROUP BY COALESCE(first_response_agent_email, assigned_user_email)
+    ORDER BY COALESCE(first_response_agent_email, assigned_user_email);
   `;
 
   return rows.map((row) => ({
@@ -312,7 +346,7 @@ export async function getTiempoPrimeraRespuestaRankingAgentes(
   const orderSql = order === "asc" ? "ASC" : "DESC";
   const sql = `
     SELECT
-      assigned_user_email AS agent_email,
+      COALESCE(first_response_agent_email, assigned_user_email) AS agent_email,
       COUNT(*) FILTER (WHERE answered) AS casos_respondidos,
       ROUND((AVG(first_response_seconds) FILTER (WHERE answered))::numeric, 2) AS avg_frt_seconds,
       ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY first_response_seconds) FILTER (WHERE answered))::numeric, 2) AS median_frt_seconds,
@@ -320,10 +354,10 @@ export async function getTiempoPrimeraRespuestaRankingAgentes(
     FROM conversation_cases
     WHERE local_date >= $1::date
       AND local_date < $2::date
-      AND assigned_user_email IS NOT NULL
+      AND COALESCE(first_response_agent_email, assigned_user_email) IS NOT NULL
       AND ($3::text IS NULL OR team_uuid = $3)
-    GROUP BY assigned_user_email
-    ORDER BY avg_frt_seconds ${orderSql}, assigned_user_email
+    GROUP BY COALESCE(first_response_agent_email, assigned_user_email)
+    ORDER BY avg_frt_seconds ${orderSql}, COALESCE(first_response_agent_email, assigned_user_email)
     LIMIT $4;
   `;
 
@@ -410,7 +444,7 @@ export async function getTiempoPrimeraRespuestaResumenAgentes(desde: string, has
     }>
   >`
     SELECT
-      assigned_user_email AS agent_email,
+      COALESCE(first_response_agent_email, assigned_user_email) AS agent_email,
       COUNT(*) AS casos_abiertos,
       SUM(CASE WHEN answered THEN 1 ELSE 0 END) AS casos_respondidos,
       ROUND((AVG(first_response_seconds) FILTER (WHERE answered))::numeric, 2) AS avg_frt_seconds,
@@ -419,8 +453,8 @@ export async function getTiempoPrimeraRespuestaResumenAgentes(desde: string, has
     FROM conversation_cases
     WHERE local_date >= ${start}::date
       AND local_date < ${endExclusive}::date
-    GROUP BY assigned_user_email
-    ORDER BY assigned_user_email;
+    GROUP BY COALESCE(first_response_agent_email, assigned_user_email)
+    ORDER BY COALESCE(first_response_agent_email, assigned_user_email);
   `;
 
   return rows.map((row) => ({
