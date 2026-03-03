@@ -17,7 +17,7 @@ const messagePayloadSchema = z.object({
   createdAt: z.string().optional(),
   to: z.string().optional(),
   from: z.string().optional(),
-  text: z.string().optional(),
+  text: z.string().nullable().optional(),
   contact: z.object({
     conversationHref: z.string().optional(),
     href: z.string().optional(),

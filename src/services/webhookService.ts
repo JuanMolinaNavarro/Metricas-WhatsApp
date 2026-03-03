@@ -12,7 +12,7 @@ export type MessageCreatedPayload = {
   createdAt?: string;
   to?: string;
   from?: string;
-  text?: string;
+  text?: string | null;
   contact: {
     conversationHref?: string;
     href?: string;
@@ -171,6 +171,7 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
   const teamName = payload.contact.team?.name;
   const hasAssignedUser = Object.prototype.hasOwnProperty.call(payload.contact, "assignedUser");
   const assignedUserEmail = payload.contact?.assignedUser ?? null;
+  const shouldCountAsAgentResponse = payload.status === "sent" && assignedUserEmail !== null;
 
   return prisma.$transaction(async (tx) => {
     const inserted = await tx.$queryRaw<{ uuid: string }[]>`
@@ -279,24 +280,26 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
         `;
       }
 
-      await tx.$executeRaw`
-        WITH candidate AS (
-          SELECT case_id, opened_received_at_utc
-          FROM conversation_cases
-          WHERE conversation_href = ${conversationHref}
-            AND answered = false
-            AND opened_received_at_utc <= ${createdAtDate}
-          ORDER BY opened_received_at_utc DESC
-          LIMIT 1
-        )
-        UPDATE conversation_cases
-        SET first_response_at_utc = ${createdAtDate},
-            first_response_seconds = FLOOR(EXTRACT(EPOCH FROM (${createdAtDate} - candidate.opened_received_at_utc))),
-            answered = true,
-            updated_at = now()
-        FROM candidate
-        WHERE conversation_cases.case_id = candidate.case_id;
-      `;
+      if (shouldCountAsAgentResponse) {
+        await tx.$executeRaw`
+          WITH candidate AS (
+            SELECT case_id, opened_received_at_utc
+            FROM conversation_cases
+            WHERE conversation_href = ${conversationHref}
+              AND answered = false
+              AND opened_received_at_utc <= ${createdAtDate}
+            ORDER BY opened_received_at_utc DESC
+            LIMIT 1
+          )
+          UPDATE conversation_cases
+          SET first_response_at_utc = ${createdAtDate},
+              first_response_seconds = FLOOR(EXTRACT(EPOCH FROM (${createdAtDate} - candidate.opened_received_at_utc))),
+              answered = true,
+              updated_at = now()
+          FROM candidate
+          WHERE conversation_cases.case_id = candidate.case_id;
+        `;
+      }
     }
 
     const isReceived = payload.status === "received";
