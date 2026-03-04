@@ -380,6 +380,185 @@ export async function getTiempoPrimeraRespuestaRankingAgentes(
   }));
 }
 
+export async function getRankingAgentesCompuesto(
+  desde: string,
+  hasta: string,
+  maxSeconds: number,
+  limit: number,
+  teamUuid?: string,
+  asOf?: string
+) {
+  const { start, endExclusive } = parseDateRange(desde, hasta);
+
+  const asOfUtc = asOf ? DateTime.fromISO(asOf, { zone: "utc" }) : null;
+  if (asOf && !asOfUtc?.isValid) {
+    throw new Error("Invalid as_of");
+  }
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      agent_email: string;
+      casos_respondidos: number;
+      casos_en_sla: number;
+      pct_sla: number | null;
+      casos_abiertos_resueltos: number;
+      casos_resueltos: number;
+      pct_resueltos: number | null;
+      casos_abiertos_abandonados: number;
+      casos_abandonados_24h: number;
+      pct_abandonados_24h: number | null;
+      score_abandonos_invertido: number | null;
+      puntos_cumplimiento_atencion: number | null;
+      puntos_resolucion_efectiva: number | null;
+      puntos_abandonos: number | null;
+      score_final: number | null;
+    }>
+  >`
+    WITH params AS (
+      SELECT COALESCE(${asOfUtc?.toJSDate() ?? null}::timestamptz, now()) AS as_of
+    ),
+    sla AS (
+      SELECT
+        CASE
+          WHEN answered THEN COALESCE(first_response_agent_email, assigned_user_email)
+          ELSE assigned_user_email
+        END AS agent_email,
+        COUNT(*) FILTER (WHERE answered) AS casos_respondidos,
+        SUM(CASE WHEN answered AND first_response_seconds <= ${maxSeconds} THEN 1 ELSE 0 END) AS casos_en_sla,
+        ROUND((
+          100.0 * SUM(CASE WHEN answered AND first_response_seconds <= ${maxSeconds} THEN 1 ELSE 0 END)
+          / NULLIF(COUNT(*) FILTER (WHERE answered), 0)
+        )::numeric, 2) AS pct_sla
+      FROM conversation_cases
+      WHERE local_date >= ${start}::date
+        AND local_date < ${endExclusive}::date
+        AND (${teamUuid ?? null}::text IS NULL OR team_uuid = ${teamUuid ?? null})
+      GROUP BY
+        CASE
+          WHEN answered THEN COALESCE(first_response_agent_email, assigned_user_email)
+          ELSE assigned_user_email
+        END
+    ),
+    resueltos AS (
+      SELECT
+        assigned_user_email AS agent_email,
+        COUNT(*) AS casos_abiertos_resueltos,
+        SUM(CASE WHEN is_closed THEN 1 ELSE 0 END) AS casos_resueltos,
+        ROUND((
+          100.0 * SUM(CASE WHEN is_closed THEN 1 ELSE 0 END)
+          / NULLIF(COUNT(*), 0)
+        )::numeric, 2) AS pct_resueltos
+      FROM conversation_cases
+      WHERE local_date >= ${start}::date
+        AND local_date < ${endExclusive}::date
+        AND (${teamUuid ?? null}::text IS NULL OR team_uuid = ${teamUuid ?? null})
+      GROUP BY assigned_user_email
+    ),
+    abandonados AS (
+      SELECT
+        c.assigned_user_email AS agent_email,
+        COUNT(*) AS casos_abiertos_abandonados,
+        SUM(
+          CASE
+            WHEN c.last_message_status = 'received'
+              AND c.last_inbound_at_utc IS NOT NULL
+              AND (SELECT as_of FROM params) >= c.last_inbound_at_utc + interval '24 hours'
+            THEN 1
+            ELSE 0
+          END
+        ) AS casos_abandonados_24h,
+        ROUND((
+          100.0 * SUM(
+            CASE
+              WHEN c.last_message_status = 'received'
+                AND c.last_inbound_at_utc IS NOT NULL
+                AND (SELECT as_of FROM params) >= c.last_inbound_at_utc + interval '24 hours'
+              THEN 1
+              ELSE 0
+            END
+          ) / NULLIF(COUNT(*), 0)
+        )::numeric, 2) AS pct_abandonados_24h
+      FROM conversation_cases c
+      WHERE c.local_date >= ${start}::date
+        AND c.local_date < ${endExclusive}::date
+        AND c.is_closed = false
+        AND (${teamUuid ?? null}::text IS NULL OR c.team_uuid = ${teamUuid ?? null})
+      GROUP BY c.assigned_user_email
+    ),
+    merged AS (
+      SELECT
+        COALESCE(s.agent_email, r.agent_email, a.agent_email) AS agent_email,
+        COALESCE(s.casos_respondidos, 0) AS casos_respondidos,
+        COALESCE(s.casos_en_sla, 0) AS casos_en_sla,
+        COALESCE(s.pct_sla, 0) AS pct_sla,
+        COALESCE(r.casos_abiertos_resueltos, 0) AS casos_abiertos_resueltos,
+        COALESCE(r.casos_resueltos, 0) AS casos_resueltos,
+        COALESCE(r.pct_resueltos, 0) AS pct_resueltos,
+        COALESCE(a.casos_abiertos_abandonados, 0) AS casos_abiertos_abandonados,
+        COALESCE(a.casos_abandonados_24h, 0) AS casos_abandonados_24h,
+        COALESCE(a.pct_abandonados_24h, 0) AS pct_abandonados_24h
+      FROM sla s
+      FULL OUTER JOIN resueltos r
+        ON r.agent_email = s.agent_email
+      FULL OUTER JOIN abandonados a
+        ON a.agent_email = COALESCE(s.agent_email, r.agent_email)
+    )
+    SELECT
+      agent_email,
+      casos_respondidos,
+      casos_en_sla,
+      ROUND(pct_sla::numeric, 2) AS pct_sla,
+      casos_abiertos_resueltos,
+      casos_resueltos,
+      ROUND(pct_resueltos::numeric, 2) AS pct_resueltos,
+      casos_abiertos_abandonados,
+      casos_abandonados_24h,
+      ROUND(pct_abandonados_24h::numeric, 2) AS pct_abandonados_24h,
+      ROUND((GREATEST(0, LEAST(100, 100 - pct_abandonados_24h)))::numeric, 2) AS score_abandonos_invertido,
+      ROUND((pct_sla * 0.35)::numeric, 2) AS puntos_cumplimiento_atencion,
+      ROUND((pct_resueltos * 0.25)::numeric, 2) AS puntos_resolucion_efectiva,
+      ROUND((GREATEST(0, LEAST(100, 100 - pct_abandonados_24h)) * 0.20)::numeric, 2) AS puntos_abandonos,
+      ROUND((
+        (pct_sla * 0.35)
+        + (pct_resueltos * 0.25)
+        + (GREATEST(0, LEAST(100, 100 - pct_abandonados_24h)) * 0.20)
+      )::numeric, 2) AS score_final
+    FROM merged
+    WHERE agent_email IS NOT NULL
+    ORDER BY score_final DESC, agent_email
+    LIMIT ${limit};
+  `;
+
+  return rows.map((row) => ({
+    agent_email: row.agent_email,
+    casos_respondidos: Number(row.casos_respondidos),
+    casos_en_sla: Number(row.casos_en_sla),
+    pct_sla: row.pct_sla === null ? 0 : Number(row.pct_sla),
+    casos_abiertos_resueltos: Number(row.casos_abiertos_resueltos),
+    casos_resueltos: Number(row.casos_resueltos),
+    pct_resueltos: row.pct_resueltos === null ? 0 : Number(row.pct_resueltos),
+    casos_abiertos_abandonados: Number(row.casos_abiertos_abandonados),
+    casos_abandonados_24h: Number(row.casos_abandonados_24h),
+    pct_abandonados_24h:
+      row.pct_abandonados_24h === null ? 0 : Number(row.pct_abandonados_24h),
+    score_abandonos_invertido:
+      row.score_abandonos_invertido === null
+        ? 0
+        : Number(row.score_abandonos_invertido),
+    puntos_cumplimiento_atencion:
+      row.puntos_cumplimiento_atencion === null
+        ? 0
+        : Number(row.puntos_cumplimiento_atencion),
+    puntos_resolucion_efectiva:
+      row.puntos_resolucion_efectiva === null
+        ? 0
+        : Number(row.puntos_resolucion_efectiva),
+    puntos_abandonos:
+      row.puntos_abandonos === null ? 0 : Number(row.puntos_abandonos),
+    score_final: row.score_final === null ? 0 : Number(row.score_final),
+  }));
+}
+
 export async function getDuracionPromedio(
   desde: string,
   hasta: string,

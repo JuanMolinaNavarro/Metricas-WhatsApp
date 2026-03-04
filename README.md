@@ -33,6 +33,7 @@ La API queda en `http://localhost:3000`.
 - `GET /metrics/tiempo-primera-respuesta/sla?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&max_seconds=300&team_uuid=&agent_email=`
 - `GET /metrics/tiempo-primera-respuesta/agentes-resumen?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&team_uuid=`
 - `GET /metrics/tiempo-primera-respuesta/ranking-agentes?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&order=asc&limit=10&team_uuid=`
+- `GET /metrics/tiempo-primera-respuesta/ranking-agentes-compuesto?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&max_seconds=300&limit=100&team_uuid=&as_of=`
 - `GET /metrics/duracion-promedio?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&team_uuid=&agent_email=`
 - `GET /metrics/tiempo-primera-respuesta/resumen-agentes?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`
 - `GET /metrics/tiempo-primera-respuesta/resumen-equipos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`
@@ -95,6 +96,7 @@ Power BI puede consumir endpoints web. Ejemplos:
 - `http://localhost:3000/metrics/tiempo-primera-respuesta/sla?desde=2025-12-01&hasta=2025-12-31&max_seconds=300`
 - `http://localhost:3000/metrics/tiempo-primera-respuesta/agentes-resumen?desde=2025-12-01&hasta=2025-12-31`
 - `http://localhost:3000/metrics/tiempo-primera-respuesta/ranking-agentes?desde=2025-12-01&hasta=2025-12-31&order=asc&limit=10`
+- `http://localhost:3000/metrics/tiempo-primera-respuesta/ranking-agentes-compuesto?desde=2025-12-01&hasta=2025-12-31&max_seconds=300&limit=100`
 - `http://localhost:3000/metrics/duracion-promedio?desde=2025-12-01&hasta=2025-12-31`
 - `http://localhost:3000/metrics/tiempo-primera-respuesta/resumen-agentes?desde=2025-12-01&hasta=2025-12-31`
 - `http://localhost:3000/metrics/tiempo-primera-respuesta/resumen-equipos?desde=2025-12-01&hasta=2025-12-31`

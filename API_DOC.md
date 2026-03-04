@@ -152,6 +152,33 @@ Respuesta:
 ]
 ```
 
+### Ranking compuesto de agentes
+
+`GET /metrics/tiempo-primera-respuesta/ranking-agentes-compuesto?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&max_seconds=300&limit=100&team_uuid=&as_of=`
+
+Respuesta:
+```
+[
+  {
+    "agent_email": "calltnieva@providers.com.ar",
+    "casos_respondidos": 98,
+    "casos_en_sla": 76,
+    "pct_sla": 77.55,
+    "casos_abiertos_resueltos": 120,
+    "casos_resueltos": 95,
+    "pct_resueltos": 79.17,
+    "casos_abiertos_abandonados": 25,
+    "casos_abandonados_24h": 2,
+    "pct_abandonados_24h": 8.0,
+    "score_abandonos_invertido": 92.0,
+    "puntos_cumplimiento_atencion": 27.14,
+    "puntos_resolucion_efectiva": 19.79,
+    "puntos_abandonos": 18.4,
+    "score_final": 65.33
+  }
+]
+```
+
 ### Duracion promedio por dia + team + agente
 
 `GET /metrics/duracion-promedio?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&team_uuid=&agent_email=`

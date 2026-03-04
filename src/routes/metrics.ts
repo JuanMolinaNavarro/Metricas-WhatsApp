@@ -9,6 +9,7 @@ import {
   getTiempoPrimeraRespuesta,
   getTiempoPrimeraRespuestaPorAgente,
   getTiempoPrimeraRespuestaRankingAgentes,
+  getRankingAgentesCompuesto,
   getTiempoPrimeraRespuestaSla,
   getDuracionPromedio,
   getTiempoPrimeraRespuestaResumenAgentes,
@@ -53,6 +54,13 @@ const frtRankingSchema = rangeSchema.extend({
   team_uuid: optionalString,
   order: z.enum(["asc", "desc"]).optional(),
   limit: z.coerce.number().int().positive().max(100).optional(),
+});
+
+const frtRankingCompuestoSchema = rangeSchema.extend({
+  team_uuid: optionalString,
+  max_seconds: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
+  as_of: optionalString,
 });
 
 const durationSchema = rangeSchema.extend({
@@ -245,6 +253,35 @@ metricsRouter.get(
         order,
         limit,
         parsed.data.team_uuid
+      );
+      return res.json(data);
+    } catch (error) {
+      return res.status(400).json({ error: "invalid_date_range" });
+    }
+  }
+);
+
+metricsRouter.get(
+  "/metrics/tiempo-primera-respuesta/ranking-agentes-compuesto",
+  async (req, res) => {
+    const parsed = frtRankingCompuestoSchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res
+        .status(400)
+        .json({ error: "invalid_query", details: parsed.error.flatten() });
+    }
+
+    const maxSeconds = parsed.data.max_seconds ?? 300;
+    const limit = parsed.data.limit ?? 100;
+
+    try {
+      const data = await getRankingAgentesCompuesto(
+        parsed.data.desde,
+        parsed.data.hasta,
+        maxSeconds,
+        limit,
+        parsed.data.team_uuid,
+        parsed.data.as_of
       );
       return res.json(data);
     } catch (error) {
