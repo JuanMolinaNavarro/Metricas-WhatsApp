@@ -41,6 +41,7 @@ La API queda en `http://localhost:3000`.
 - `GET /metrics/duracion-promedio/resumen-equipos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`
 - `GET /metrics/casos-resueltos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&team_uuid=&agent_email=`
 - `GET /metrics/casos-abandonados-24h?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&team_uuid=&agent_email=&as_of=`
+- `GET /metrics/horarios-contacto/ultimos-7-dias`
 
 ## Ejemplo de webhook (message_created)
 
@@ -134,3 +135,4 @@ Power BI puede consumir endpoints web. Ejemplos:
 - `GET /metrics/casos-abandonados-24h/ultimas-24h?team_uuid=&agent_email=&as_of=`
 - `GET /metrics/casos-abandonados-24h/ultimas-48h?team_uuid=&agent_email=&as_of=`
 - `GET /metrics/casos-abandonados-24h/ultimos-7-dias?team_uuid=&agent_email=&as_of=`
+- `GET /metrics/horarios-contacto/ultimos-7-dias`

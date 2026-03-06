@@ -234,6 +234,23 @@ Respuesta:
 ]
 ```
 
+### Horarios de contacto (ultimos 7 dias)
+
+`GET /metrics/horarios-contacto/ultimos-7-dias`
+
+Respuesta:
+```
+[
+  {
+    "hora_del_dia": 10,
+    "hora": "10:00",
+    "conversaciones_abiertas": 245,
+    "pct_total": 21.83,
+    "ranking_popularidad": 1
+  }
+]
+```
+
 ## Power BI
 
 Power BI puede consumir estos endpoints con:
@@ -267,6 +284,7 @@ in
 - `GET /metrics/casos-abandonados-24h/ultimas-24h?team_uuid=&agent_email=&as_of=`
 - `GET /metrics/casos-abandonados-24h/ultimas-48h?team_uuid=&agent_email=&as_of=`
 - `GET /metrics/casos-abandonados-24h/ultimos-7-dias?team_uuid=&agent_email=&as_of=`
+- `GET /metrics/horarios-contacto/ultimos-7-dias`
 
 ## Usuarios y login
 

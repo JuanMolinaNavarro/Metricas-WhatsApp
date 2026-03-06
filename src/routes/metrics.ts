@@ -20,6 +20,7 @@ import {
   getCasosAbandonados24h,
   getCasosAbiertos,
   getCasosPendientes,
+  getHorariosContactoUltimos7Dias,
 } from "../services/metricsService.js";
 
 export const metricsRouter = Router();
@@ -852,6 +853,18 @@ metricsRouter.get(
       return res.json(data);
     } catch (error) {
       return res.status(400).json({ error: "invalid_date_range" });
+    }
+  }
+);
+
+metricsRouter.get(
+  "/metrics/horarios-contacto/ultimos-7-dias",
+  async (_req, res) => {
+    try {
+      const data = await getHorariosContactoUltimos7Dias();
+      return res.json(data);
+    } catch (error) {
+      return res.status(500).json({ error: "internal_error" });
     }
   }
 );

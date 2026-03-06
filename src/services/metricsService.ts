@@ -961,3 +961,63 @@ export async function getCasosAbiertos(
     casos_abiertos: Number(row.casos_abiertos),
   }));
 }
+
+export async function getHorariosContactoUltimos7Dias() {
+  const rows = await prisma.$queryRaw<
+    Array<{
+      hora_del_dia: number;
+      hora: string;
+      conversaciones_abiertas: number;
+      pct_total: number | null;
+      ranking_popularidad: number;
+    }>
+  >`
+    WITH base AS (
+      SELECT
+        EXTRACT(
+          HOUR FROM (
+            COALESCE(opened_received_at_utc, opened_payload_created_at_utc)
+            AT TIME ZONE 'America/Argentina/Tucuman'
+          )
+        )::int AS hora_del_dia
+      FROM conversation_cases
+      WHERE COALESCE(opened_received_at_utc, opened_payload_created_at_utc) >= now() - interval '7 days'
+    ),
+    horas AS (
+      SELECT generate_series(0, 23)::int AS hora_del_dia
+    ),
+    agregadas AS (
+      SELECT
+        h.hora_del_dia,
+        TO_CHAR(make_time(h.hora_del_dia, 0, 0), 'HH24:MI') AS hora,
+        COALESCE(COUNT(b.hora_del_dia), 0)::int AS conversaciones_abiertas
+      FROM horas h
+      LEFT JOIN base b ON b.hora_del_dia = h.hora_del_dia
+      GROUP BY h.hora_del_dia
+    ),
+    totales AS (
+      SELECT SUM(conversaciones_abiertas)::int AS total_conversaciones
+      FROM agregadas
+    )
+    SELECT
+      a.hora_del_dia,
+      a.hora,
+      a.conversaciones_abiertas,
+      ROUND((
+        100.0 * a.conversaciones_abiertas
+        / NULLIF(t.total_conversaciones, 0)
+      )::numeric, 2) AS pct_total,
+      DENSE_RANK() OVER (ORDER BY a.conversaciones_abiertas DESC) AS ranking_popularidad
+    FROM agregadas a
+    CROSS JOIN totales t
+    ORDER BY a.hora_del_dia;
+  `;
+
+  return rows.map((row) => ({
+    hora_del_dia: Number(row.hora_del_dia),
+    hora: row.hora,
+    conversaciones_abiertas: Number(row.conversaciones_abiertas),
+    pct_total: row.pct_total === null ? 0 : Number(row.pct_total),
+    ranking_popularidad: Number(row.ranking_popularidad),
+  }));
+}
