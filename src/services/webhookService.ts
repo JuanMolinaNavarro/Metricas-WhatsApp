@@ -154,16 +154,19 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
     return { ignored: true, reason: "non_whatsapp_source" };
   }
 
-  // Use createdAt from payload or fall back to now
-  const createdAtStr = payload.createdAt || new Date().toISOString();
-  const createdAtUtc = DateTime.fromISO(createdAtStr, { zone: "utc" });
-  if (!createdAtUtc.isValid) {
-    throw new Error("Invalid createdAt timestamp");
-  }
+  // Canonical event time for metrics is always the server receive time.
+  const receivedAtUtc = DateTime.utc();
+  const receivedAtDate = receivedAtUtc.toJSDate();
+  const localDate = computeLocalDate(receivedAtUtc);
 
-  const localDate = computeLocalDate(createdAtUtc);
-
-  const createdAtDate = createdAtUtc.toJSDate();
+  // Keep payload createdAt only as audit metadata.
+  const payloadCreatedAtUtc = payload.createdAt
+    ? DateTime.fromISO(payload.createdAt, { zone: "utc" })
+    : null;
+  const payloadCreatedAtDate =
+    payloadCreatedAtUtc && payloadCreatedAtUtc.isValid
+      ? payloadCreatedAtUtc.toJSDate()
+      : null;
 
   // Use conversationHref from contact or fall back to contact.href or uuid
   const conversationHref = payload.contact.conversationHref || payload.contact.href || payload.contact.uuid || payload.uuid;
@@ -179,7 +182,7 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
   return prisma.$transaction(async (tx) => {
     const inserted = await tx.$queryRaw<{ uuid: string }[]>`
       INSERT INTO messages_raw (uuid, conversation_href, status, channel, created_at_utc, payload)
-      VALUES (${payload.uuid}, ${conversationHref}, ${payload.status}::"MessageStatus", ${payload.channel}, ${createdAtDate}, ${JSON.stringify(rawBody)}::jsonb)
+      VALUES (${payload.uuid}, ${conversationHref}, ${payload.status}::"MessageStatus", ${payload.channel}, ${receivedAtDate}, ${JSON.stringify(rawBody)}::jsonb)
       ON CONFLICT (uuid) DO NOTHING
       RETURNING uuid;
     `;
@@ -196,7 +199,7 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
               WHEN assigned_user_email IS DISTINCT FROM ${assignedUserEmail}
               THEN CASE
                 WHEN ${assignedUserEmail}::text IS NULL THEN NULL
-                ELSE ${createdAtDate}
+                ELSE ${receivedAtDate}
               END
               ELSE assigned_at_utc
             END,
@@ -223,7 +226,7 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
           team_name,
           updated_at
         )
-        VALUES (${conversationHref}, ${localDate}::date, ${createdAtDate}, 1, ${teamUuid || null}, ${teamName || null}, now())
+        VALUES (${conversationHref}, ${localDate}::date, ${receivedAtDate}, 1, ${teamUuid || null}, ${teamName || null}, now())
         ON CONFLICT (conversation_href, local_date) DO UPDATE SET
           inbound_count_day = conversation_day_metrics.inbound_count_day + 1,
           first_inbound_at_utc = CASE
@@ -231,6 +234,44 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
             ELSE LEAST(conversation_day_metrics.first_inbound_at_utc, EXCLUDED.first_inbound_at_utc)
           END,
           updated_at = now();
+      `;
+
+      const inferredTeamUuid = teamUuid || "unknown";
+      const inferredTeamName = teamName || "Sin equipo asignado";
+      const inferredAssignedAtDate = assignedUserEmail ? receivedAtDate : null;
+      const inferredCaseId = `${conversationHref}::${receivedAtUtc.toISO()}::inferred`;
+
+      // Guarantee an open case for inbound traffic even if conversation_opened webhook is missing.
+      await tx.$executeRaw`
+        INSERT INTO conversation_cases (
+          case_id,
+          conversation_href,
+          team_uuid,
+          team_name,
+          opened_received_at_utc,
+          opened_payload_created_at_utc,
+          local_date,
+          assigned_user_email,
+          assigned_at_utc,
+          updated_at
+        )
+        SELECT
+          ${inferredCaseId},
+          ${conversationHref},
+          ${inferredTeamUuid},
+          ${inferredTeamName},
+          ${receivedAtDate},
+          ${payloadCreatedAtDate},
+          ${localDate}::date,
+          ${assignedUserEmail},
+          ${inferredAssignedAtDate},
+          now()
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM conversation_cases
+          WHERE conversation_href = ${conversationHref}
+            AND is_closed = false
+        );
       `;
       
       // Update team metrics
@@ -262,14 +303,14 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
           first_outbound_after_inbound_at_utc = CASE
             WHEN conversation_day_metrics.first_outbound_after_inbound_at_utc IS NULL
              AND conversation_day_metrics.first_inbound_at_utc IS NOT NULL
-             AND ${createdAtDate} > conversation_day_metrics.first_inbound_at_utc
-            THEN ${createdAtDate}
+             AND ${receivedAtDate} > conversation_day_metrics.first_inbound_at_utc
+            THEN ${receivedAtDate}
             ELSE conversation_day_metrics.first_outbound_after_inbound_at_utc
           END,
           answered_same_day = CASE
             WHEN conversation_day_metrics.first_outbound_after_inbound_at_utc IS NULL
              AND conversation_day_metrics.first_inbound_at_utc IS NOT NULL
-             AND ${createdAtDate} > conversation_day_metrics.first_inbound_at_utc
+             AND ${receivedAtDate} > conversation_day_metrics.first_inbound_at_utc
             THEN true
             ELSE conversation_day_metrics.answered_same_day
           END,
@@ -300,14 +341,14 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
             FROM conversation_cases
             WHERE conversation_href = ${conversationHref}
               AND answered = false
-              AND COALESCE(assigned_at_utc, opened_received_at_utc) <= ${createdAtDate}
+              AND COALESCE(assigned_at_utc, opened_received_at_utc) <= ${receivedAtDate}
             ORDER BY opened_received_at_utc DESC
             LIMIT 1
           )
           UPDATE conversation_cases
-          SET first_response_at_utc = ${createdAtDate},
+          SET first_response_at_utc = ${receivedAtDate},
               first_response_agent_email = ${assignedUserEmail},
-              first_response_seconds = FLOOR(EXTRACT(EPOCH FROM (${createdAtDate} - candidate.frt_base_at))),
+              first_response_seconds = FLOOR(EXTRACT(EPOCH FROM (${receivedAtDate} - candidate.frt_base_at))),
               answered = true,
               updated_at = now()
           FROM candidate
@@ -324,29 +365,29 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
         SELECT case_id
         FROM conversation_cases
         WHERE conversation_href = ${conversationHref}
-          AND opened_received_at_utc <= ${createdAtDate}
+          AND opened_received_at_utc <= ${receivedAtDate}
         ORDER BY is_closed ASC, opened_received_at_utc DESC
         LIMIT 1
       )
       UPDATE conversation_cases
       SET last_inbound_at_utc = CASE
             WHEN ${isReceived}
-             AND (last_inbound_at_utc IS NULL OR ${createdAtDate} > last_inbound_at_utc)
-            THEN ${createdAtDate}
+             AND (last_inbound_at_utc IS NULL OR ${receivedAtDate} > last_inbound_at_utc)
+            THEN ${receivedAtDate}
             ELSE last_inbound_at_utc
           END,
           last_outbound_at_utc = CASE
             WHEN ${isSent}
-             AND (last_outbound_at_utc IS NULL OR ${createdAtDate} > last_outbound_at_utc)
-            THEN ${createdAtDate}
+             AND (last_outbound_at_utc IS NULL OR ${receivedAtDate} > last_outbound_at_utc)
+            THEN ${receivedAtDate}
             ELSE last_outbound_at_utc
           END,
           last_message_status = CASE
             WHEN ${isReceived}
-             AND (last_inbound_at_utc IS NULL OR ${createdAtDate} > last_inbound_at_utc)
+             AND (last_inbound_at_utc IS NULL OR ${receivedAtDate} > last_inbound_at_utc)
             THEN 'received'::"MessageStatus"
             WHEN ${isSent}
-             AND (last_outbound_at_utc IS NULL OR ${createdAtDate} > last_outbound_at_utc)
+             AND (last_outbound_at_utc IS NULL OR ${receivedAtDate} > last_outbound_at_utc)
             THEN 'sent'::"MessageStatus"
             ELSE last_message_status
           END,

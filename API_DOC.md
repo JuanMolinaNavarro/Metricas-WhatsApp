@@ -33,6 +33,11 @@ Respuesta:
 
 `GET /metrics/casos-atendidos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`
 
+Notas:
+- `conversaciones_entrantes` representa casos recibidos (base `conversation_cases`).
+- `conversaciones_atendidas_same_day` considera casos respondidos el mismo dia local de apertura.
+- Para eventos `message_created`, el tiempo canonico es la recepcion del webhook en servidor.
+
 Respuesta:
 ```
 [

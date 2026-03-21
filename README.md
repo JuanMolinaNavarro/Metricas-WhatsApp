@@ -108,10 +108,12 @@ Power BI puede consumir endpoints web. Ejemplos:
 
 ## Notas de procesamiento
 - Deduplicacion por `uuid` usando `messages_raw` con `ON CONFLICT DO NOTHING`.
-- La fecha local se calcula en `America/Argentina/Tucuman` a partir de `createdAt` (UTC).
+- El tiempo canonico de metricas para `message_created` es el momento de recepcion del webhook en el servidor.
+- La fecha local se calcula en `America/Argentina/Tucuman` a partir de ese tiempo de recepcion.
 - Solo se actualizan metricas si el evento fue insertado (idempotencia).
 - FRT se mide desde el momento en que el backend recibe `conversation_opened` hasta el primer `message_created` con status `sent`.
 - `conversation_opened` se deduplica si llega otro evento con el mismo `conversation_href` en una ventana de 60 segundos.
+- Si llega un `message_created` entrante y no existe caso abierto, se crea un caso inferido para no perder cobertura de casos.
 - Duracion de conversacion se calcula entre `opened_received_at_utc` y `closed_received_at_utc` (server receive time) y se atribuye al dia de apertura.
 - Casos resueltos se calculan con `is_closed` sobre casos abiertos por dia de apertura.
 - Casos abandonados 24h se calculan si el ultimo mensaje fue del cliente (`last_message_status = received`) y `as_of >= last_inbound_at_utc + 24h`.

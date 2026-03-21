@@ -39,10 +39,28 @@ export async function getCasosAtendidos(desde: string, hasta: string) {
     SELECT
       local_date AS dia,
       COUNT(*) AS conversaciones_entrantes,
-      SUM(CASE WHEN answered_same_day THEN 1 ELSE 0 END) AS conversaciones_atendidas_same_day,
-      ROUND(100.0 * SUM(CASE WHEN answered_same_day THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 2) AS pct_atendidas
-    FROM conversation_day_metrics
-    WHERE local_date >= ${start}::date AND local_date < ${endExclusive}::date
+      SUM(
+        CASE
+          WHEN answered
+            AND first_response_at_utc IS NOT NULL
+            AND ((first_response_at_utc AT TIME ZONE 'America/Argentina/Tucuman')::date = local_date)
+          THEN 1 ELSE 0
+        END
+      ) AS conversaciones_atendidas_same_day,
+      ROUND(
+        100.0 * SUM(
+          CASE
+            WHEN answered
+              AND first_response_at_utc IS NOT NULL
+              AND ((first_response_at_utc AT TIME ZONE 'America/Argentina/Tucuman')::date = local_date)
+            THEN 1 ELSE 0
+          END
+        ) / NULLIF(COUNT(*),0),
+        2
+      ) AS pct_atendidas
+    FROM conversation_cases
+    WHERE local_date >= ${start}::date
+      AND local_date < ${endExclusive}::date
     GROUP BY local_date
     ORDER BY local_date;
   `;
@@ -67,10 +85,28 @@ export async function getCasosAtendidosResumen(desde: string, hasta: string) {
   >`
     SELECT
       COUNT(*) AS conversaciones_entrantes,
-      SUM(CASE WHEN answered_same_day THEN 1 ELSE 0 END) AS conversaciones_atendidas_same_day,
-      ROUND(100.0 * SUM(CASE WHEN answered_same_day THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 2) AS pct_atendidas
-    FROM conversation_day_metrics
-    WHERE local_date >= ${start}::date AND local_date < ${endExclusive}::date;
+      SUM(
+        CASE
+          WHEN answered
+            AND first_response_at_utc IS NOT NULL
+            AND ((first_response_at_utc AT TIME ZONE 'America/Argentina/Tucuman')::date = local_date)
+          THEN 1 ELSE 0
+        END
+      ) AS conversaciones_atendidas_same_day,
+      ROUND(
+        100.0 * SUM(
+          CASE
+            WHEN answered
+              AND first_response_at_utc IS NOT NULL
+              AND ((first_response_at_utc AT TIME ZONE 'America/Argentina/Tucuman')::date = local_date)
+            THEN 1 ELSE 0
+          END
+        ) / NULLIF(COUNT(*),0),
+        2
+      ) AS pct_atendidas
+    FROM conversation_cases
+    WHERE local_date >= ${start}::date
+      AND local_date < ${endExclusive}::date;
   `;
 
   const row = rows[0] ?? {
@@ -104,10 +140,28 @@ export async function getMetricasPorEquipo(desde: string, hasta: string) {
       COALESCE(team_uuid, 'unknown') AS team_uuid,
       local_date,
       COUNT(*) AS conversaciones_entrantes,
-      SUM(CASE WHEN answered_same_day THEN 1 ELSE 0 END) AS conversaciones_atendidas_same_day,
-      ROUND(100.0 * SUM(CASE WHEN answered_same_day THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 2) AS pct_atendidas
-    FROM conversation_day_metrics
-    WHERE local_date >= ${start}::date AND local_date < ${endExclusive}::date
+      SUM(
+        CASE
+          WHEN answered
+            AND first_response_at_utc IS NOT NULL
+            AND ((first_response_at_utc AT TIME ZONE 'America/Argentina/Tucuman')::date = local_date)
+          THEN 1 ELSE 0
+        END
+      ) AS conversaciones_atendidas_same_day,
+      ROUND(
+        100.0 * SUM(
+          CASE
+            WHEN answered
+              AND first_response_at_utc IS NOT NULL
+              AND ((first_response_at_utc AT TIME ZONE 'America/Argentina/Tucuman')::date = local_date)
+            THEN 1 ELSE 0
+          END
+        ) / NULLIF(COUNT(*),0),
+        2
+      ) AS pct_atendidas
+    FROM conversation_cases
+    WHERE local_date >= ${start}::date
+      AND local_date < ${endExclusive}::date
     GROUP BY team_uuid, team_name, local_date
     ORDER BY team_name, local_date;
   `;
