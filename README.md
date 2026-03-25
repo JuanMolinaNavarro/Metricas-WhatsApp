@@ -112,8 +112,9 @@ Power BI puede consumir endpoints web. Ejemplos:
 - La fecha local se calcula en `America/Argentina/Tucuman` a partir de ese tiempo de recepcion.
 - Solo se actualizan metricas si el evento fue insertado (idempotencia).
 - FRT se mide desde el momento en que el backend recibe `conversation_opened` hasta el primer `message_created` con status `sent`.
-- `conversation_opened` se deduplica si llega otro evento con el mismo `conversation_href` en una ventana de 60 segundos.
+- `conversation_opened` crea un caso nuevo solo si no hay un caso abierto para ese `conversation_href`; si ya existe uno abierto, se actualiza ese caso.
 - Si llega un `message_created` entrante y no existe caso abierto, se crea un caso inferido para no perder cobertura de casos.
+- `conversation_closed` cierra todos los casos abiertos de ese `conversation_href` dentro de la misma transaccion.
 - Duracion de conversacion se calcula entre `opened_received_at_utc` y `closed_received_at_utc` (server receive time) y se atribuye al dia de apertura.
 - Casos resueltos se calculan con `is_closed` sobre casos abiertos por dia de apertura.
 - Casos abandonados 24h se calculan si el ultimo mensaje fue del cliente (`last_message_status = received`) y `as_of >= last_inbound_at_utc + 24h`.

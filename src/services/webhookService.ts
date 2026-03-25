@@ -101,18 +101,42 @@ export async function handleConversationOpened(payload: ConversationOpenedPayloa
   const caseId = `${conversationHref}::${openedReceivedAtUtc.toISO()}`;
 
   return prisma.$transaction(async (tx) => {
-    const windowStart = DateTime.fromJSDate(openedReceivedDate).minus({ seconds: 60 }).toJSDate();
-    const recent = await tx.$queryRaw<{ case_id: string }[]>`
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${conversationHref}));
+    `;
+
+    const existingOpenCase = await tx.$queryRaw<{ case_id: string }[]>`
       SELECT case_id
       FROM conversation_cases
       WHERE conversation_href = ${conversationHref}
-        AND opened_received_at_utc >= ${windowStart}
+        AND is_closed = false
       ORDER BY opened_received_at_utc DESC
       LIMIT 1;
     `;
 
-    if (recent.length > 0) {
-      return { deduped: true };
+    if (existingOpenCase.length > 0) {
+      await tx.$executeRaw`
+        UPDATE conversation_cases
+        SET team_uuid = ${teamUuid},
+            team_name = ${teamName},
+            assigned_user_email = ${assignedUserEmail},
+            assigned_at_utc = CASE
+              WHEN assigned_user_email IS DISTINCT FROM ${assignedUserEmail}
+              THEN CASE
+                WHEN ${assignedUserEmail}::text IS NULL THEN NULL
+                ELSE ${openedReceivedDate}
+              END
+              ELSE assigned_at_utc
+            END,
+            updated_at = now()
+        WHERE case_id = ${existingOpenCase[0].case_id};
+      `;
+
+      return {
+        deduped: true,
+        reason: "open_case_exists",
+        case_id: existingOpenCase[0].case_id,
+      };
     }
 
     await tx.$executeRaw`
@@ -142,7 +166,7 @@ export async function handleConversationOpened(payload: ConversationOpenedPayloa
       );
     `;
 
-    return { inserted: true };
+    return { inserted: true, case_id: caseId };
   });
 }
 
@@ -189,6 +213,13 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
 
     if (inserted.length === 0) {
       return { deduped: true };
+    }
+
+    const lockConversationHref = caseConversationHref || conversationHref || null;
+    if (lockConversationHref) {
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtext(${lockConversationHref}));
+      `;
     }
 
     if (hasAssignedUser && caseConversationHref) {
@@ -337,11 +368,11 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
           WITH candidate AS (
             SELECT
               case_id,
-              COALESCE(assigned_at_utc, opened_received_at_utc) AS frt_base_at
+              opened_received_at_utc AS frt_base_at
             FROM conversation_cases
             WHERE conversation_href = ${conversationHref}
               AND answered = false
-              AND COALESCE(assigned_at_utc, opened_received_at_utc) <= ${receivedAtDate}
+              AND opened_received_at_utc <= ${receivedAtDate}
             ORDER BY opened_received_at_utc DESC
             LIMIT 1
           )
@@ -469,27 +500,16 @@ export async function handleConversationClosed(payload: ConversationClosedPayloa
   const assignmentAtDate = closedPayloadDate ?? closedReceivedDate;
 
   return prisma.$transaction(async (tx) => {
-    const openCase = await tx.$queryRaw<{ case_id: string; opened_received_at_utc: Date }[]>`
-      SELECT case_id, opened_received_at_utc
-      FROM conversation_cases
-      WHERE conversation_href = ${conversationHref}
-        AND is_closed = false
-      ORDER BY opened_received_at_utc DESC
-      LIMIT 1;
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${conversationHref}));
     `;
 
-    if (openCase.length === 0) {
-      return { ignored: true, reason: "no_open_case" };
-    }
-
-    const openedReceivedAt = openCase[0].opened_received_at_utc;
-
-    await tx.$executeRaw`
+    const closedCases = await tx.$queryRaw<{ case_id: string }[]>`
       UPDATE conversation_cases
       SET is_closed = true,
           closed_received_at_utc = ${closedReceivedDate},
           closed_payload_closed_at_utc = ${closedPayloadDate},
-          duration_seconds = FLOOR(EXTRACT(EPOCH FROM (${closedReceivedDate} - ${openedReceivedAt}))),
+          duration_seconds = FLOOR(EXTRACT(EPOCH FROM (${closedReceivedDate} - opened_received_at_utc))),
           assigned_user_email = CASE
             WHEN ${hasAssignedUser} THEN ${assignedUserEmail}
             ELSE assigned_user_email
@@ -503,9 +523,15 @@ export async function handleConversationClosed(payload: ConversationClosedPayloa
             ELSE assigned_at_utc
           END,
           updated_at = now()
-      WHERE case_id = ${openCase[0].case_id};
+      WHERE conversation_href = ${conversationHref}
+        AND is_closed = false
+      RETURNING case_id;
     `;
 
-    return { updated: true };
+    if (closedCases.length === 0) {
+      return { ignored: true, reason: "no_open_case" };
+    }
+
+    return { updated: true, closed_cases: closedCases.length };
   });
 }

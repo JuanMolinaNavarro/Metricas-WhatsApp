@@ -84,6 +84,7 @@ model conversation_cases {
   updated_at                  DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([conversation_href, opened_received_at_utc(sort: Desc)])
+  @@index([conversation_href, is_closed, opened_received_at_utc(sort: Desc)])
   @@index([local_date])
   @@index([team_uuid])
   @@index([team_uuid, local_date])
