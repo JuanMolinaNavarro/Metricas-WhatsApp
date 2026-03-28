@@ -108,3 +108,14 @@ model users {
   @@index([rol])
   @@index([isActive])
 }
+
+model evento_metrica {
+  id          Int      @id @default(autoincrement())
+  fecha       DateTime @db.Date
+  titulo      String
+  descripcion String?
+  color       String   @default("#EF553B")
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([fecha])
+}

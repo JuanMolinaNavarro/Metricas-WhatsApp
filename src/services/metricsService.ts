@@ -511,10 +511,11 @@ export async function getRankingAgentesCompuesto(
     abandonados AS (
       SELECT
         c.assigned_user_email AS agent_email,
-        COUNT(*) AS casos_abiertos_abandonados,
+        COUNT(*) FILTER (WHERE c.is_closed = false) AS casos_abiertos_abandonados,
         SUM(
           CASE
-            WHEN c.last_message_status = 'received'
+            WHEN c.is_closed = false
+              AND c.last_message_status = 'received'
               AND c.last_inbound_at_utc IS NOT NULL
               AND (SELECT as_of FROM params) >= c.last_inbound_at_utc + interval '24 hours'
             THEN 1
@@ -524,7 +525,8 @@ export async function getRankingAgentesCompuesto(
         ROUND((
           100.0 * SUM(
             CASE
-              WHEN c.last_message_status = 'received'
+              WHEN c.is_closed = false
+                AND c.last_message_status = 'received'
                 AND c.last_inbound_at_utc IS NOT NULL
                 AND (SELECT as_of FROM params) >= c.last_inbound_at_utc + interval '24 hours'
               THEN 1
@@ -535,7 +537,6 @@ export async function getRankingAgentesCompuesto(
       FROM conversation_cases c
       WHERE c.local_date >= ${start}::date
         AND c.local_date < ${endExclusive}::date
-        AND c.is_closed = false
         AND (${teamUuid ?? null}::text IS NULL OR c.team_uuid = ${teamUuid ?? null})
       GROUP BY c.assigned_user_email
     ),
@@ -978,11 +979,18 @@ export async function getCasosAbandonados24h(
         ) / NULLIF(COUNT(*),0)
       )::numeric, 2) AS pct_abandonados_24h
     FROM conversation_cases c
-    WHERE c.local_date >= ${start}::date
+    WHERE c.is_closed = false
       AND c.local_date < ${endExclusive}::date
-      AND c.is_closed = false
       AND (${teamUuid ?? null}::text IS NULL OR c.team_uuid = ${teamUuid ?? null})
       AND (${agentEmail ?? null}::text IS NULL OR c.assigned_user_email = ${agentEmail ?? null})
+      AND (
+        c.local_date >= ${start}::date
+        OR (
+          c.last_message_status = 'received'
+          AND c.last_inbound_at_utc IS NOT NULL
+          AND (SELECT as_of FROM params) >= c.last_inbound_at_utc + interval '24 hours'
+        )
+      )
     GROUP BY c.local_date, c.team_uuid, c.team_name, c.assigned_user_email
     ORDER BY c.local_date, c.team_name, c.assigned_user_email;
   `;
@@ -1140,4 +1148,63 @@ export async function getHorariosContactoUltimos7Dias() {
     pct_total: row.pct_total === null ? 0 : Number(row.pct_total),
     ranking_popularidad: Number(row.ranking_popularidad),
   }));
+}
+
+export async function getEventos(desde: string, hasta: string) {
+  const { start, endExclusive } = parseDateRange(desde, hasta);
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      id: number;
+      fecha: Date;
+      titulo: string;
+      descripcion: string | null;
+      color: string;
+    }>
+  >`
+    SELECT id, fecha, titulo, descripcion, color
+    FROM evento_metrica
+    WHERE fecha >= ${start}::date
+      AND fecha < ${endExclusive}::date
+    ORDER BY fecha, id;
+  `;
+
+  return rows.map((row) => ({
+    id: Number(row.id),
+    fecha: DateTime.fromJSDate(row.fecha).toISODate(),
+    titulo: row.titulo,
+    descripcion: row.descripcion ?? null,
+    color: row.color,
+  }));
+}
+
+export async function createEvento(
+  fecha: string,
+  titulo: string,
+  descripcion?: string,
+  color?: string
+) {
+  const parsed = DateTime.fromISO(fecha, { zone: "utc" });
+  if (!parsed.isValid) throw new Error("Invalid fecha");
+
+  const row = await prisma.evento_metrica.create({
+    data: {
+      fecha: new Date(fecha),
+      titulo,
+      descripcion: descripcion ?? null,
+      color: color ?? "#EF553B",
+    },
+  });
+
+  return {
+    id: row.id,
+    fecha: DateTime.fromJSDate(row.fecha).toISODate(),
+    titulo: row.titulo,
+    descripcion: row.descripcion ?? null,
+    color: row.color,
+  };
+}
+
+export async function deleteEvento(id: number) {
+  await prisma.evento_metrica.delete({ where: { id } });
 }

@@ -6,6 +6,7 @@ import { webhookRouter } from "./routes/webhook.js";
 import { metricsRouter } from "./routes/metrics.js";
 import { usersRouter } from "./routes/users.js";
 import { authRouter } from "./routes/auth.js";
+import { eventosRouter } from "./routes/eventos.js";
 import { ensureSaUser } from "./services/userService.js";
 
 const require = createRequire(import.meta.url);
@@ -21,6 +22,7 @@ app.use(webhookRouter);
 app.use(metricsRouter);
 app.use(usersRouter);
 app.use(authRouter);
+app.use(eventosRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   res.status(500).json({ error: "internal_error" });

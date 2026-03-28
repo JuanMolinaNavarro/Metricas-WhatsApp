@@ -397,7 +397,8 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
         FROM conversation_cases
         WHERE conversation_href = ${conversationHref}
           AND opened_received_at_utc <= ${receivedAtDate}
-        ORDER BY is_closed ASC, opened_received_at_utc DESC
+          AND is_closed = false
+        ORDER BY opened_received_at_utc DESC
         LIMIT 1
       )
       UPDATE conversation_cases
@@ -416,9 +417,11 @@ export async function handleMessageCreated(payload: MessageCreatedPayload, rawBo
           last_message_status = CASE
             WHEN ${isReceived}
              AND (last_inbound_at_utc IS NULL OR ${receivedAtDate} > last_inbound_at_utc)
+             AND (last_outbound_at_utc IS NULL OR ${receivedAtDate} > last_outbound_at_utc)
             THEN 'received'::"MessageStatus"
             WHEN ${isSent}
              AND (last_outbound_at_utc IS NULL OR ${receivedAtDate} > last_outbound_at_utc)
+             AND (last_inbound_at_utc IS NULL OR ${receivedAtDate} > last_inbound_at_utc)
             THEN 'sent'::"MessageStatus"
             ELSE last_message_status
           END,
