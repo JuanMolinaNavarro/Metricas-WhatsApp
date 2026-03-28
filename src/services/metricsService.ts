@@ -861,6 +861,72 @@ export async function getCasosResueltos(
   }));
 }
 
+export async function getCasosCerradosMismoDia(
+  desde: string,
+  hasta: string,
+  teamUuid?: string,
+  agentEmail?: string
+) {
+  const { start, endExclusive } = parseDateRange(desde, hasta);
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      dia: Date;
+      team_uuid: string;
+      team_name: string;
+      agent_email: string | null;
+      casos_abiertos: number;
+      casos_cerrados_mismo_dia: number;
+      pct_cerrados_mismo_dia: number | null;
+    }>
+  >`
+    SELECT
+      local_date AS dia,
+      team_uuid,
+      team_name,
+      assigned_user_email AS agent_email,
+      COUNT(*) AS casos_abiertos,
+      SUM(
+        CASE
+          WHEN is_closed
+            AND closed_received_at_utc IS NOT NULL
+            AND (closed_received_at_utc AT TIME ZONE 'America/Argentina/Tucuman')::date = local_date
+          THEN 1 ELSE 0
+        END
+      ) AS casos_cerrados_mismo_dia,
+      ROUND((
+        100.0 * SUM(
+          CASE
+            WHEN is_closed
+              AND closed_received_at_utc IS NOT NULL
+              AND (closed_received_at_utc AT TIME ZONE 'America/Argentina/Tucuman')::date = local_date
+            THEN 1 ELSE 0
+          END
+        ) / NULLIF(COUNT(*), 0)
+      )::numeric, 2) AS pct_cerrados_mismo_dia
+    FROM conversation_cases
+    WHERE local_date >= ${start}::date
+      AND local_date < ${endExclusive}::date
+      AND (${teamUuid ?? null}::text IS NULL OR team_uuid = ${teamUuid ?? null})
+      AND (${agentEmail ?? null}::text IS NULL OR assigned_user_email = ${agentEmail ?? null})
+    GROUP BY local_date, team_uuid, team_name, assigned_user_email
+    ORDER BY local_date, team_name, assigned_user_email;
+  `;
+
+  return rows.map((row) => ({
+    dia: DateTime.fromJSDate(row.dia).toISODate(),
+    team_uuid: row.team_uuid,
+    team_name: row.team_name,
+    agent_email: row.agent_email,
+    casos_abiertos: Number(row.casos_abiertos),
+    casos_cerrados_mismo_dia: Number(row.casos_cerrados_mismo_dia),
+    pct_cerrados_mismo_dia:
+      row.pct_cerrados_mismo_dia === null
+        ? 0
+        : Number(row.pct_cerrados_mismo_dia),
+  }));
+}
+
 export async function getCasosAbandonados24h(
   desde: string,
   hasta: string,

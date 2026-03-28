@@ -17,6 +17,7 @@ import {
   getDuracionPromedioResumenAgentes,
   getDuracionPromedioResumenEquipos,
   getCasosResueltos,
+  getCasosCerradosMismoDia,
   getCasosAbandonados24h,
   getCasosAbiertos,
   getCasosPendientes,
@@ -410,6 +411,27 @@ metricsRouter.get("/metrics/casos-resueltos", async (req, res) => {
 
   try {
     const data = await getCasosResueltos(
+      parsed.data.desde,
+      parsed.data.hasta,
+      parsed.data.team_uuid,
+      parsed.data.agent_email
+    );
+    return res.json(data);
+  } catch (error) {
+    return res.status(400).json({ error: "invalid_date_range" });
+  }
+});
+
+metricsRouter.get("/metrics/casos-cerrados-mismo-dia", async (req, res) => {
+  const parsed = casosResueltosSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ error: "invalid_query", details: parsed.error.flatten() });
+  }
+
+  try {
+    const data = await getCasosCerradosMismoDia(
       parsed.data.desde,
       parsed.data.hasta,
       parsed.data.team_uuid,

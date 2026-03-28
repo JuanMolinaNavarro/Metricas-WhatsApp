@@ -239,6 +239,34 @@ Respuesta:
 ]
 ```
 
+### Casos cerrados el mismo dia de apertura
+
+`GET /metrics/casos-cerrados-mismo-dia?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&team_uuid=&agent_email=`
+
+Cuenta cuantos casos fueron **abiertos y cerrados en el mismo dia local** (`America/Argentina/Tucuman`).
+
+Respuesta:
+```
+[
+  {
+    "dia": "2025-12-30",
+    "team_uuid": "c93180c54de0449b805d318cc825d1c4",
+    "team_name": "Salta Cable",
+    "agent_email": "calltnieva@providers.com.ar",
+    "casos_abiertos": 50,
+    "casos_cerrados_mismo_dia": 38,
+    "pct_cerrados_mismo_dia": 76.00
+  }
+]
+```
+
+- `casos_abiertos`: total de casos abiertos ese dia (por `local_date`).
+- `casos_cerrados_mismo_dia`: de esos, cuantos tienen `is_closed = true` y `closed_received_at_utc` en el mismo dia local.
+- `pct_cerrados_mismo_dia`: porcentaje sobre `casos_abiertos`.
+- Filtros opcionales: `team_uuid`, `agent_email`.
+
+---
+
 ### Horarios de contacto (ultimos 7 dias)
 
 `GET /metrics/horarios-contacto/ultimos-7-dias`
