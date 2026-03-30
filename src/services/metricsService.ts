@@ -1160,9 +1160,10 @@ export async function getEventos(desde: string, hasta: string) {
       titulo: string;
       descripcion: string | null;
       color: string;
+      unidad: string | null;
     }>
   >`
-    SELECT id, fecha, titulo, descripcion, color
+    SELECT id, fecha, titulo, descripcion, color, unidad
     FROM evento_metrica
     WHERE fecha >= ${start}::date
       AND fecha < ${endExclusive}::date
@@ -1175,6 +1176,7 @@ export async function getEventos(desde: string, hasta: string) {
     titulo: row.titulo,
     descripcion: row.descripcion ?? null,
     color: row.color,
+    unidad: row.unidad ?? null,
   }));
 }
 
@@ -1182,7 +1184,8 @@ export async function createEvento(
   fecha: string,
   titulo: string,
   descripcion?: string,
-  color?: string
+  color?: string,
+  unidad?: string
 ) {
   const parsed = DateTime.fromISO(fecha, { zone: "utc" });
   if (!parsed.isValid) throw new Error("Invalid fecha");
@@ -1193,6 +1196,7 @@ export async function createEvento(
       titulo,
       descripcion: descripcion ?? null,
       color: color ?? "#EF553B",
+      unidad: unidad ?? null,
     },
   });
 
@@ -1202,6 +1206,7 @@ export async function createEvento(
     titulo: row.titulo,
     descripcion: row.descripcion ?? null,
     color: row.color,
+    unidad: row.unidad ?? null,
   };
 }
 

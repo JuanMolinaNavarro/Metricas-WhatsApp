@@ -21,6 +21,7 @@ const createSchema = z.object({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .optional(),
+  unidad: z.string().max(120).optional(),
 });
 
 eventosRouter.get("/metrics/eventos", async (req, res) => {
@@ -52,7 +53,8 @@ eventosRouter.post("/metrics/eventos", async (req, res) => {
       parsed.data.fecha,
       parsed.data.titulo,
       parsed.data.descripcion,
-      parsed.data.color
+      parsed.data.color,
+      parsed.data.unidad
     );
     return res.status(201).json(evento);
   } catch (err) {
