@@ -81,6 +81,7 @@ model conversation_cases {
   last_inbound_at_utc         DateTime? @db.Timestamptz(6)
   last_outbound_at_utc        DateTime? @db.Timestamptz(6)
   last_message_status         MessageStatus?
+  was_abandoned_24h           Boolean?
   updated_at                  DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([conversation_href, opened_received_at_utc(sort: Desc)])

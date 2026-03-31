@@ -513,6 +513,11 @@ export async function handleConversationClosed(payload: ConversationClosedPayloa
           closed_received_at_utc = ${closedReceivedDate},
           closed_payload_closed_at_utc = ${closedPayloadDate},
           duration_seconds = FLOOR(EXTRACT(EPOCH FROM (${closedReceivedDate} - opened_received_at_utc))),
+          was_abandoned_24h = (
+            last_message_status = 'received'
+            AND last_inbound_at_utc IS NOT NULL
+            AND ${closedReceivedDate} >= last_inbound_at_utc + interval '24 hours'
+          ),
           assigned_user_email = CASE
             WHEN ${hasAssignedUser} THEN ${assignedUserEmail}
             ELSE assigned_user_email

@@ -19,6 +19,7 @@ import {
   getCasosResueltos,
   getCasosCerradosMismoDia,
   getCasosAbandonados24h,
+  getCasosAbandonadosHistorico,
   getCasosAbiertos,
   getCasosPendientes,
   getHorariosContactoUltimos7Dias,
@@ -458,6 +459,27 @@ metricsRouter.get("/metrics/casos-abandonados-24h", async (req, res) => {
       parsed.data.team_uuid,
       parsed.data.agent_email,
       parsed.data.as_of
+    );
+    return res.json(data);
+  } catch (error) {
+    return res.status(400).json({ error: "invalid_date_range" });
+  }
+});
+
+metricsRouter.get("/metrics/casos-abandonados-historico", async (req, res) => {
+  const parsed = casosResueltosSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ error: "invalid_query", details: parsed.error.flatten() });
+  }
+
+  try {
+    const data = await getCasosAbandonadosHistorico(
+      parsed.data.desde,
+      parsed.data.hasta,
+      parsed.data.team_uuid,
+      parsed.data.agent_email
     );
     return res.json(data);
   } catch (error) {

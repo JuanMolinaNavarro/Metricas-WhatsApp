@@ -1006,6 +1006,62 @@ export async function getCasosAbandonados24h(
   }));
 }
 
+export async function getCasosAbandonadosHistorico(
+  desde: string,
+  hasta: string,
+  teamUuid?: string,
+  agentEmail?: string
+) {
+  const { start, endExclusive } = parseDateRange(desde, hasta);
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      dia: Date;
+      team_uuid: string;
+      team_name: string;
+      agent_email: string | null;
+      casos_abiertos: number;
+      casos_abandonados_24h: number;
+    }>
+  >`
+    SELECT
+      c.local_date AS dia,
+      c.team_uuid,
+      c.team_name,
+      c.assigned_user_email AS agent_email,
+      COUNT(*) AS casos_abiertos,
+      SUM(
+        CASE
+          -- Closed cases: use the stamped flag
+          WHEN c.is_closed = true AND c.was_abandoned_24h = true THEN 1
+          -- Open cases: use live check (same logic as before)
+          WHEN c.is_closed = false
+            AND c.last_message_status = 'received'
+            AND c.last_inbound_at_utc IS NOT NULL
+            AND now() >= c.last_inbound_at_utc + interval '24 hours'
+          THEN 1
+          ELSE 0
+        END
+      ) AS casos_abandonados_24h
+    FROM conversation_cases c
+    WHERE c.local_date >= ${start}::date
+      AND c.local_date < ${endExclusive}::date
+      AND (${teamUuid ?? null}::text IS NULL OR c.team_uuid = ${teamUuid ?? null})
+      AND (${agentEmail ?? null}::text IS NULL OR c.assigned_user_email = ${agentEmail ?? null})
+    GROUP BY c.local_date, c.team_uuid, c.team_name, c.assigned_user_email
+    ORDER BY c.local_date, c.team_name, c.assigned_user_email;
+  `;
+
+  return rows.map((row) => ({
+    dia: DateTime.fromJSDate(row.dia).toISODate(),
+    team_uuid: row.team_uuid,
+    team_name: row.team_name,
+    agent_email: row.agent_email,
+    casos_abiertos: Number(row.casos_abiertos),
+    casos_abandonados_24h: Number(row.casos_abandonados_24h),
+  }));
+}
+
 export async function getCasosPendientes(
   desde: string,
   hasta: string,
