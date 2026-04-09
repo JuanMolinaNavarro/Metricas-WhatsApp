@@ -1217,9 +1217,12 @@ export async function getEventos(desde: string, hasta: string) {
       descripcion: string | null;
       color: string;
       unidad: string | null;
+      afectados: number | null;
+      tipo: string | null;
+      creado_por: string | null;
     }>
   >`
-    SELECT id, fecha, titulo, descripcion, color, unidad
+    SELECT id, fecha, titulo, descripcion, color, unidad, afectados, tipo, creado_por
     FROM evento_metrica
     WHERE fecha >= ${start}::date
       AND fecha < ${endExclusive}::date
@@ -1233,6 +1236,9 @@ export async function getEventos(desde: string, hasta: string) {
     descripcion: row.descripcion ?? null,
     color: row.color,
     unidad: row.unidad ?? null,
+    afectados: row.afectados ?? null,
+    tipo: row.tipo ?? null,
+    creado_por: row.creado_por ?? null,
   }));
 }
 
@@ -1241,7 +1247,10 @@ export async function createEvento(
   titulo: string,
   descripcion?: string,
   color?: string,
-  unidad?: string
+  unidad?: string,
+  afectados?: number,
+  tipo?: string,
+  creado_por?: string
 ) {
   const parsed = DateTime.fromISO(fecha, { zone: "utc" });
   if (!parsed.isValid) throw new Error("Invalid fecha");
@@ -1253,6 +1262,9 @@ export async function createEvento(
       descripcion: descripcion ?? null,
       color: color ?? "#EF553B",
       unidad: unidad ?? null,
+      afectados: afectados ?? null,
+      tipo: tipo ?? null,
+      creado_por: creado_por ?? null,
     },
   });
 
@@ -1263,6 +1275,55 @@ export async function createEvento(
     descripcion: row.descripcion ?? null,
     color: row.color,
     unidad: row.unidad ?? null,
+    afectados: row.afectados ?? null,
+    tipo: row.tipo ?? null,
+    creado_por: row.creado_por ?? null,
+  };
+}
+
+export async function updateEvento(
+  id: number,
+  data: {
+    fecha?: string;
+    titulo?: string;
+    descripcion?: string | null;
+    color?: string;
+    unidad?: string | null;
+    afectados?: number | null;
+    tipo?: string | null;
+    creado_por?: string | null;
+  }
+) {
+  const updateData: Record<string, unknown> = {};
+
+  if (data.fecha !== undefined) {
+    const parsed = DateTime.fromISO(data.fecha, { zone: "utc" });
+    if (!parsed.isValid) throw new Error("Invalid fecha");
+    updateData.fecha = new Date(data.fecha);
+  }
+  if (data.titulo !== undefined) updateData.titulo = data.titulo;
+  if (Object.prototype.hasOwnProperty.call(data, "descripcion")) updateData.descripcion = data.descripcion ?? null;
+  if (data.color !== undefined) updateData.color = data.color;
+  if (Object.prototype.hasOwnProperty.call(data, "unidad")) updateData.unidad = data.unidad ?? null;
+  if (Object.prototype.hasOwnProperty.call(data, "afectados")) updateData.afectados = data.afectados ?? null;
+  if (Object.prototype.hasOwnProperty.call(data, "tipo")) updateData.tipo = data.tipo ?? null;
+  if (Object.prototype.hasOwnProperty.call(data, "creado_por")) updateData.creado_por = data.creado_por ?? null;
+
+  const row = await prisma.evento_metrica.update({
+    where: { id },
+    data: updateData,
+  });
+
+  return {
+    id: row.id,
+    fecha: DateTime.fromJSDate(row.fecha).toISODate(),
+    titulo: row.titulo,
+    descripcion: row.descripcion ?? null,
+    color: row.color,
+    unidad: row.unidad ?? null,
+    afectados: row.afectados ?? null,
+    tipo: row.tipo ?? null,
+    creado_por: row.creado_por ?? null,
   };
 }
 

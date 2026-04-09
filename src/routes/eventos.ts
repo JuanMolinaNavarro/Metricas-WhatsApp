@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   getEventos,
   createEvento,
+  updateEvento,
   deleteEvento,
 } from "../services/metricsService.js";
 
@@ -22,6 +23,23 @@ const createSchema = z.object({
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .optional(),
   unidad: z.string().max(120).optional(),
+  afectados: z.number().int().positive().optional(),
+  tipo: z.string().max(80).optional(),
+  creado_por: z.string().max(120).optional(),
+});
+
+const updateSchema = z.object({
+  fecha: z.string().min(1).optional(),
+  titulo: z.string().min(1).max(120).optional(),
+  descripcion: z.string().max(500).nullable().optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .optional(),
+  unidad: z.string().max(120).nullable().optional(),
+  afectados: z.number().int().positive().nullable().optional(),
+  tipo: z.string().max(80).nullable().optional(),
+  creado_por: z.string().max(120).nullable().optional(),
 });
 
 eventosRouter.get("/metrics/eventos", async (req, res) => {
@@ -54,13 +72,41 @@ eventosRouter.post("/metrics/eventos", async (req, res) => {
       parsed.data.titulo,
       parsed.data.descripcion,
       parsed.data.color,
-      parsed.data.unidad
+      parsed.data.unidad,
+      parsed.data.afectados,
+      parsed.data.tipo,
+      parsed.data.creado_por
     );
     return res.status(201).json(evento);
   } catch (err) {
     return res
       .status(400)
       .json({ error: "invalid_fecha", message: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+eventosRouter.put("/metrics/eventos/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    return res.status(400).json({ error: "invalid_id" });
+  }
+
+  const parsed = updateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ error: "invalid_body", details: parsed.error.flatten() });
+  }
+
+  try {
+    const evento = await updateEvento(id, parsed.data);
+    return res.status(200).json(evento);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Record to update not found")) {
+      return res.status(404).json({ error: "not_found" });
+    }
+    return res.status(400).json({ error: "invalid_data", message: msg });
   }
 });
 
