@@ -26,6 +26,9 @@ const createSchema = z.object({
   afectados: z.number().int().positive().optional(),
   tipo: z.string().max(80).optional(),
   creado_por: z.string().max(120).optional(),
+  zona: z.string().max(120).optional(),
+  desdeHora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").optional(),
+  hastaHora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").optional(),
 });
 
 const updateSchema = z.object({
@@ -40,6 +43,9 @@ const updateSchema = z.object({
   afectados: z.number().int().positive().nullable().optional(),
   tipo: z.string().max(80).nullable().optional(),
   creado_por: z.string().max(120).nullable().optional(),
+  zona: z.string().max(120).nullable().optional(),
+  desdeHora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").nullable().optional(),
+  hastaHora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:MM (24h)").nullable().optional(),
 });
 
 eventosRouter.get("/metrics/eventos", async (req, res) => {
@@ -75,7 +81,10 @@ eventosRouter.post("/metrics/eventos", async (req, res) => {
       parsed.data.unidad,
       parsed.data.afectados,
       parsed.data.tipo,
-      parsed.data.creado_por
+      parsed.data.creado_por,
+      parsed.data.zona,
+      parsed.data.desdeHora,
+      parsed.data.hastaHora
     );
     return res.status(201).json(evento);
   } catch (err) {

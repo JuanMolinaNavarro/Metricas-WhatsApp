@@ -1220,9 +1220,12 @@ export async function getEventos(desde: string, hasta: string) {
       afectados: number | null;
       tipo: string | null;
       creado_por: string | null;
+      zona: string | null;
+      desdeHora: string | null;
+      hastaHora: string | null;
     }>
   >`
-    SELECT id, fecha, titulo, descripcion, color, unidad, afectados, tipo, creado_por
+    SELECT id, fecha, titulo, descripcion, color, unidad, afectados, tipo, creado_por, zona, "desdeHora", "hastaHora"
     FROM evento_metrica
     WHERE fecha >= ${start}::date
       AND fecha < ${endExclusive}::date
@@ -1239,6 +1242,9 @@ export async function getEventos(desde: string, hasta: string) {
     afectados: row.afectados ?? null,
     tipo: row.tipo ?? null,
     creado_por: row.creado_por ?? null,
+    zona: row.zona ?? null,
+    desdeHora: row.desdeHora ?? null,
+    hastaHora: row.hastaHora ?? null,
   }));
 }
 
@@ -1250,7 +1256,10 @@ export async function createEvento(
   unidad?: string,
   afectados?: number,
   tipo?: string,
-  creado_por?: string
+  creado_por?: string,
+  zona?: string,
+  desdeHora?: string,
+  hastaHora?: string
 ) {
   const parsed = DateTime.fromISO(fecha, { zone: "utc" });
   if (!parsed.isValid) throw new Error("Invalid fecha");
@@ -1265,6 +1274,9 @@ export async function createEvento(
       afectados: afectados ?? null,
       tipo: tipo ?? null,
       creado_por: creado_por ?? null,
+      zona: zona ?? null,
+      desdeHora: desdeHora ?? null,
+      hastaHora: hastaHora ?? null,
     },
   });
 
@@ -1278,6 +1290,9 @@ export async function createEvento(
     afectados: row.afectados ?? null,
     tipo: row.tipo ?? null,
     creado_por: row.creado_por ?? null,
+    zona: row.zona ?? null,
+    desdeHora: row.desdeHora ?? null,
+    hastaHora: row.hastaHora ?? null,
   };
 }
 
@@ -1292,6 +1307,9 @@ export async function updateEvento(
     afectados?: number | null;
     tipo?: string | null;
     creado_por?: string | null;
+    zona?: string | null;
+    desdeHora?: string | null;
+    hastaHora?: string | null;
   }
 ) {
   const updateData: Record<string, unknown> = {};
@@ -1308,6 +1326,9 @@ export async function updateEvento(
   if (Object.prototype.hasOwnProperty.call(data, "afectados")) updateData.afectados = data.afectados ?? null;
   if (Object.prototype.hasOwnProperty.call(data, "tipo")) updateData.tipo = data.tipo ?? null;
   if (Object.prototype.hasOwnProperty.call(data, "creado_por")) updateData.creado_por = data.creado_por ?? null;
+  if (Object.prototype.hasOwnProperty.call(data, "zona")) updateData.zona = data.zona ?? null;
+  if (Object.prototype.hasOwnProperty.call(data, "desdeHora")) updateData.desdeHora = data.desdeHora ?? null;
+  if (Object.prototype.hasOwnProperty.call(data, "hastaHora")) updateData.hastaHora = data.hastaHora ?? null;
 
   const row = await prisma.evento_metrica.update({
     where: { id },
@@ -1324,6 +1345,9 @@ export async function updateEvento(
     afectados: row.afectados ?? null,
     tipo: row.tipo ?? null,
     creado_por: row.creado_por ?? null,
+    zona: row.zona ?? null,
+    desdeHora: row.desdeHora ?? null,
+    hastaHora: row.hastaHora ?? null,
   };
 }
 

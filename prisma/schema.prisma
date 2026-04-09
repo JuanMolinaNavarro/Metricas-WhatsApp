@@ -120,6 +120,9 @@ model evento_metrica {
   afectados   Int?
   tipo        String?
   creado_por  String?
+  zona        String?
+  desdeHora   String?
+  hastaHora   String?
   created_at  DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([fecha])
