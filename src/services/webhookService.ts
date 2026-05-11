@@ -49,6 +49,7 @@ export type ConversationClosedPayload = {
   source?: string;
   href?: string;
   closedAt?: string;
+  closingReason?: string;
   contact?: {
     [key: string]: any;
   };
@@ -494,6 +495,8 @@ export async function handleConversationClosed(payload: ConversationClosedPayloa
   const hasAssignedUser = !!contact && Object.prototype.hasOwnProperty.call(contact, "assignedUser");
   const assignedUserEmail = hasAssignedUser ? (contact as any).assignedUser ?? null : null;
 
+  const closingReason = payload.closingReason ?? null;
+
   const closedReceivedAtUtc = DateTime.utc();
   const closedReceivedDate = closedReceivedAtUtc.toJSDate();
   const closedPayloadUtc = payload.closedAt
@@ -518,6 +521,7 @@ export async function handleConversationClosed(payload: ConversationClosedPayloa
             AND last_inbound_at_utc IS NOT NULL
             AND ${closedReceivedDate} >= last_inbound_at_utc + interval '24 hours'
           ),
+          closing_reason = ${closingReason},
           assigned_user_email = CASE
             WHEN ${hasAssignedUser} THEN ${assignedUserEmail}
             ELSE assigned_user_email

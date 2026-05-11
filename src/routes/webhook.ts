@@ -55,6 +55,7 @@ const conversationClosedSchema = z.object({
   source: z.string().optional(),
   href: z.string().min(1),
   closedAt: z.string().optional(),
+  closingReason: z.string().optional(),
   contact: z.any().optional(),
 }).passthrough();
 
